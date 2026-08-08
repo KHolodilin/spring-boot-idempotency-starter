@@ -1,3 +1,12 @@
+# Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.cursor/
+
 # Compiled class file
 *.class
 
