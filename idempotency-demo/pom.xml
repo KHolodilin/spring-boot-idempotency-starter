@@ -15,6 +15,13 @@
     <name>Idempotency Demo</name>
     <description>Runnable demo application consuming the idempotency starter like an external application would.</description>
 
+    <properties>
+        <!-- the demo application is not published to Maven Central -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- demo is an application, not a library: no coverage requirements -->
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.kholodilin</groupId>
@@ -76,6 +83,13 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
             </plugin>
         </plugins>
     </build>

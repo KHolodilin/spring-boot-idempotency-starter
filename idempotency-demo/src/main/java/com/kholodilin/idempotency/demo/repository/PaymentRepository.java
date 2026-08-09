@@ -1,7 +1,6 @@
 package com.kholodilin.idempotency.demo.repository;
 
 import java.math.BigDecimal;
-
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;

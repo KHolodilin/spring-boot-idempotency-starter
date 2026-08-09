@@ -9,9 +9,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import com.kholodilin.idempotency.spi.FingerprintStrategy;
-
 import org.jspecify.annotations.Nullable;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.BooleanNode;
@@ -41,8 +39,7 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
         // fail fast on unknown algorithm
         try {
             MessageDigest.getInstance(algorithm);
-        }
-        catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalArgumentException("Unknown digest algorithm: " + algorithm, e);
         }
         this.algorithm = algorithm;
@@ -97,11 +94,9 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
             default -> {
                 if (node.isNull()) {
                     sb.append("null");
-                }
-                else if (node.isString()) {
+                } else if (node.isString()) {
                     writeString(node.stringValue(), sb);
-                }
-                else {
+                } else {
                     // binary / POJO and any future node types: fall back to Jackson output
                     sb.append(node.toString());
                 }
@@ -110,12 +105,13 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
     }
 
     private static String normalize(Number number) {
-        BigDecimal decimal = switch (number) {
-            case BigDecimal d -> d;
-            case Double d -> BigDecimal.valueOf(d);
-            case Float f -> new BigDecimal(f.toString());
-            default -> new BigDecimal(number.toString());
-        };
+        BigDecimal decimal =
+                switch (number) {
+                    case BigDecimal d -> d;
+                    case Double d -> BigDecimal.valueOf(d);
+                    case Float f -> new BigDecimal(f.toString());
+                    default -> new BigDecimal(number.toString());
+                };
         return decimal.stripTrailingZeros().toPlainString();
     }
 
@@ -134,8 +130,7 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
                 default -> {
                     if (c < 0x20) {
                         sb.append(String.format("\\u%04x", (int) c));
-                    }
-                    else {
+                    } else {
                         sb.append(c);
                     }
                 }
@@ -147,8 +142,7 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
     private MessageDigest digest() {
         try {
             return MessageDigest.getInstance(algorithm);
-        }
-        catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Digest algorithm disappeared: " + algorithm, e);
         }
     }

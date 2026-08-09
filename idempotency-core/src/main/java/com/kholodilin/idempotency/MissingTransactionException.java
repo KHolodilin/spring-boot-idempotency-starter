@@ -9,8 +9,8 @@ public class MissingTransactionException extends IdempotencyException {
 
     public MissingTransactionException(IdempotencyKey key) {
         super(("No active transaction while executing operation '%s' with idempotency key '%s'. "
-                + "IdempotencyService.execute(...) must be called inside an active transaction, "
-                + "e.g. from a @Transactional method.")
+                        + "IdempotencyService.execute(...) must be called inside an active transaction, "
+                        + "e.g. from a @Transactional method.")
                 .formatted(key.operation(), key.key()));
     }
 }

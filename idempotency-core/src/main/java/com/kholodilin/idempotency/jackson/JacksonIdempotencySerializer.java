@@ -4,9 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
-
 import org.jspecify.annotations.Nullable;
-
 import tools.jackson.databind.json.JsonMapper;
 
 /**

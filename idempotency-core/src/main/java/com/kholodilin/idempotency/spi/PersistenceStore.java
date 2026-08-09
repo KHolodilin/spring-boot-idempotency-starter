@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
-
 import org.jspecify.annotations.Nullable;
 
 /**

@@ -1,9 +1,7 @@
 package com.kholodilin.idempotency;
 
 import com.kholodilin.idempotency.jackson.Json;
-
 import org.jspecify.annotations.Nullable;
-
 import tools.jackson.databind.JsonNode;
 
 /**

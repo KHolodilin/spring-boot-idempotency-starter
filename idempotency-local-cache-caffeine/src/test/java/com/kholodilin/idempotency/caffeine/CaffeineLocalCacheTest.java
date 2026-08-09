@@ -8,7 +8,6 @@ import com.github.benmanes.caffeine.cache.Ticker;
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.IdempotencyStatus;
-
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,8 +17,7 @@ class CaffeineLocalCacheTest {
     private static final Instant NOW = Instant.parse("2026-08-09T00:00:00Z");
 
     private static IdempotencyRecord record(String key) {
-        return IdempotencyRecord
-                .processing(new IdempotencyKey("CREATE_PAYMENT", key), "hash", NOW, null)
+        return IdempotencyRecord.processing(new IdempotencyKey("CREATE_PAYMENT", key), "hash", NOW, null)
                 .completed("java.lang.String", "\"ok\"", NOW);
     }
 
@@ -71,9 +69,9 @@ class CaffeineLocalCacheTest {
         CaffeineLocalCache cache = new CaffeineLocalCache(Duration.ofMinutes(10), 100, true, null);
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "k-stats");
 
-        cache.get(key);                 // miss
+        cache.get(key); // miss
         cache.put(key, record("k-stats"));
-        cache.get(key);                 // hit
+        cache.get(key); // hit
 
         assertThat(cache.statistics().hitCount()).isEqualTo(1);
         assertThat(cache.statistics().missCount()).isEqualTo(1);

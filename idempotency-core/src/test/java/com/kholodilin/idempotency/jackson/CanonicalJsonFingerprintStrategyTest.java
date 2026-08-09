@@ -14,8 +14,7 @@ class CanonicalJsonFingerprintStrategyTest {
 
     private final CanonicalJsonFingerprintStrategy strategy = new CanonicalJsonFingerprintStrategy();
 
-    record Command(String orderId, BigDecimal amount, String comment) {
-    }
+    record Command(String orderId, BigDecimal amount, String comment) {}
 
     @Test
     void sameObjectProducesSameFingerprint() {

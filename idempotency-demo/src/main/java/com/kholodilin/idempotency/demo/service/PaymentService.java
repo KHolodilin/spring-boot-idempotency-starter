@@ -11,7 +11,6 @@ import com.kholodilin.idempotency.demo.model.PaymentResult;
 import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.model.RefundResult;
 import com.kholodilin.idempotency.demo.repository.PaymentRepository;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,9 +33,10 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final FailureSimulator failureSimulator;
 
-    public PaymentService(IdempotencyService idempotencyService,
-                          PaymentRepository paymentRepository,
-                          FailureSimulator failureSimulator) {
+    public PaymentService(
+            IdempotencyService idempotencyService,
+            PaymentRepository paymentRepository,
+            FailureSimulator failureSimulator) {
         this.idempotencyService = idempotencyService;
         this.paymentRepository = paymentRepository;
         this.failureSimulator = failureSimulator;
@@ -58,8 +58,8 @@ public class PaymentService {
 
         // deterministic business rejection: replayed on duplicate requests
         if (request.amount().compareTo(BALANCE) > 0) {
-            return ExecutionResult.rejected("INSUFFICIENT_FUNDS",
-                    new InsufficientFundsDetails(request.amount(), BALANCE));
+            return ExecutionResult.rejected(
+                    "INSUFFICIENT_FUNDS", new InsufficientFundsDetails(request.amount(), BALANCE));
         }
 
         String paymentId = UUID.randomUUID().toString();
@@ -69,17 +69,12 @@ public class PaymentService {
 
     @Transactional
     public ExecutionResult<RefundResult> refund(String idempotencyKey, RefundRequest request) {
-        return idempotencyService.execute(
-                "REFUND_PAYMENT",
-                idempotencyKey,
-                request,
-                RefundResult.class,
-                () -> {
-                    if (request.amount().compareTo(REFUND_LIMIT) > 0) {
-                        return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request);
-                    }
-                    return ExecutionResult.success(new RefundResult(
-                            UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED"));
-                });
+        return idempotencyService.execute("REFUND_PAYMENT", idempotencyKey, request, RefundResult.class, () -> {
+            if (request.amount().compareTo(REFUND_LIMIT) > 0) {
+                return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request);
+            }
+            return ExecutionResult.success(
+                    new RefundResult(UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED"));
+        });
     }
 }

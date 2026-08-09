@@ -39,26 +39,37 @@ public record IdempotencyRecord(
         Objects.requireNonNull(createdAt, "createdAt");
     }
 
-    public static IdempotencyRecord processing(IdempotencyKey key,
-                                               String requestHash,
-                                               Instant createdAt,
-                                               @Nullable Instant expiresAt) {
-        return new IdempotencyRecord(key, IdempotencyStatus.PROCESSING, requestHash,
-                null, null, null, createdAt, null, expiresAt);
+    public static IdempotencyRecord processing(
+            IdempotencyKey key, String requestHash, Instant createdAt, @Nullable Instant expiresAt) {
+        return new IdempotencyRecord(
+                key, IdempotencyStatus.PROCESSING, requestHash, null, null, null, createdAt, null, expiresAt);
     }
 
-    public IdempotencyRecord completed(@Nullable String resultType,
-                                       @Nullable String resultPayload,
-                                       Instant completedAt) {
-        return new IdempotencyRecord(key, IdempotencyStatus.COMPLETED, requestHash,
-                resultType, resultPayload, null, createdAt, completedAt, expiresAt);
+    public IdempotencyRecord completed(
+            @Nullable String resultType, @Nullable String resultPayload, Instant completedAt) {
+        return new IdempotencyRecord(
+                key,
+                IdempotencyStatus.COMPLETED,
+                requestHash,
+                resultType,
+                resultPayload,
+                null,
+                createdAt,
+                completedAt,
+                expiresAt);
     }
 
-    public IdempotencyRecord rejected(String errorCode,
-                                      @Nullable String detailsPayload,
-                                      Instant completedAt) {
-        return new IdempotencyRecord(key, IdempotencyStatus.REJECTED, requestHash,
-                null, detailsPayload, errorCode, createdAt, completedAt, expiresAt);
+    public IdempotencyRecord rejected(String errorCode, @Nullable String detailsPayload, Instant completedAt) {
+        return new IdempotencyRecord(
+                key,
+                IdempotencyStatus.REJECTED,
+                requestHash,
+                null,
+                detailsPayload,
+                errorCode,
+                createdAt,
+                completedAt,
+                expiresAt);
     }
 
     /**

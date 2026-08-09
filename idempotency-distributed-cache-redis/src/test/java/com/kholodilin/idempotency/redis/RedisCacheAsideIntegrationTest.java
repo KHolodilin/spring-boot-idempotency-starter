@@ -14,10 +14,8 @@ import com.kholodilin.idempotency.IdempotencyStatus;
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.core.DefaultIdempotencyService;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,14 +46,15 @@ class RedisCacheAsideIntegrationTest {
 
     RedisDistributedCache redisCache;
 
-    record PaymentResult(String paymentId) {
-    }
+    record PaymentResult(String paymentId) {}
 
     @BeforeAll
     static void initFactory() {
         factory = new LettuceConnectionFactory(
                 new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getMappedPort(6379)),
-                LettuceClientConfiguration.builder().commandTimeout(Duration.ofSeconds(2)).build());
+                LettuceClientConfiguration.builder()
+                        .commandTimeout(Duration.ofSeconds(2))
+                        .build());
         factory.afterPropertiesSet();
     }
 
@@ -67,7 +66,9 @@ class RedisCacheAsideIntegrationTest {
     @BeforeEach
     void initCache() {
         redisCache = new RedisDistributedCache(
-                factory, "cache-aside-" + System.nanoTime() + ":", Duration.ofMinutes(5),
+                factory,
+                "cache-aside-" + System.nanoTime() + ":",
+                Duration.ofMinutes(5),
                 RedisCacheFailurePolicy.FAIL_OPEN);
     }
 
@@ -131,8 +132,12 @@ class RedisCacheAsideIntegrationTest {
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "cold-1");
         assertThat(actionCalls).hasValue(1);
         assertThat(replayed.isSuccess()).isTrue();
-        assertThat(redisCache.get(key)).as("persistence hit must be promoted to L2").isPresent();
-        assertThat(caffeine.get(key)).as("persistence hit must be promoted to L1").isPresent();
+        assertThat(redisCache.get(key))
+                .as("persistence hit must be promoted to L2")
+                .isPresent();
+        assertThat(caffeine.get(key))
+                .as("persistence hit must be promoted to L1")
+                .isPresent();
     }
 
     @Test
@@ -149,8 +154,8 @@ class RedisCacheAsideIntegrationTest {
                         .build());
         dead.afterPropertiesSet();
         try {
-            RedisDistributedCache deadCache = new RedisDistributedCache(
-                    dead, "dead:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
+            RedisDistributedCache deadCache =
+                    new RedisDistributedCache(dead, "dead:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
             DefaultIdempotencyService service = service(new CaffeineLocalCache(), deadCache);
 
             ExecutionResult<PaymentResult> first =
@@ -158,10 +163,11 @@ class RedisCacheAsideIntegrationTest {
             ExecutionResult<PaymentResult> replayed = service(new CaffeineLocalCache(), deadCache)
                     .execute("CREATE_PAYMENT", "dead-ca-1", "req", PaymentResult.class, this::action);
 
-            assertThat(actionCalls).as("first executes, second replays from persistence").hasValue(1);
+            assertThat(actionCalls)
+                    .as("first executes, second replays from persistence")
+                    .hasValue(1);
             assertThat(replayed).isEqualTo(first);
-        }
-        finally {
+        } finally {
             dead.destroy();
         }
     }
@@ -178,8 +184,8 @@ class RedisCacheAsideIntegrationTest {
         }
 
         @Override
-        public synchronized boolean acquire(IdempotencyKey key, String requestHash, Instant createdAt,
-                                            Instant expiresAt) {
+        public synchronized boolean acquire(
+                IdempotencyKey key, String requestHash, Instant createdAt, Instant expiresAt) {
             if (data.containsKey(key)) {
                 return false;
             }
@@ -188,14 +194,14 @@ class RedisCacheAsideIntegrationTest {
         }
 
         @Override
-        public synchronized void complete(IdempotencyKey key, String resultType, String resultPayload,
-                                          Instant completedAt) {
+        public synchronized void complete(
+                IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {
             data.compute(key, (k, r) -> r.completed(resultType, resultPayload, completedAt));
         }
 
         @Override
-        public synchronized void reject(IdempotencyKey key, String errorCode, String detailsPayload,
-                                        Instant completedAt) {
+        public synchronized void reject(
+                IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {
             data.compute(key, (k, r) -> r.rejected(errorCode, detailsPayload, completedAt));
         }
     }

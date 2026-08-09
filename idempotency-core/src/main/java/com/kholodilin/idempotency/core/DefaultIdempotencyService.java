@@ -25,7 +25,6 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import org.jspecify.annotations.Nullable;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -73,11 +72,12 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     }
 
     @Override
-    public <RQ, RS> ExecutionResult<RS> execute(String operation,
-                                                String idempotencyKey,
-                                                @Nullable RQ request,
-                                                Class<RS> resultType,
-                                                Supplier<ExecutionResult<RS>> action) {
+    public <RQ, RS> ExecutionResult<RS> execute(
+            String operation,
+            String idempotencyKey,
+            @Nullable RQ request,
+            Class<RS> resultType,
+            Supplier<ExecutionResult<RS>> action) {
         Objects.requireNonNull(resultType, "resultType");
         Objects.requireNonNull(action, "action");
         IdempotencyKey key = new IdempotencyKey(operation, idempotencyKey);
@@ -117,15 +117,17 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                 "Could not acquire idempotency record for %s after %d attempts".formatted(key, MAX_ACQUIRE_ATTEMPTS));
     }
 
-    private <RS> ExecutionResult<RS> runAction(IdempotencyKey key,
-                                               String fingerprint,
-                                               Instant createdAt,
-                                               @Nullable Instant expiresAt,
-                                               Class<RS> resultType,
-                                               Supplier<ExecutionResult<RS>> action) {
+    private <RS> ExecutionResult<RS> runAction(
+            IdempotencyKey key,
+            String fingerprint,
+            Instant createdAt,
+            @Nullable Instant expiresAt,
+            Class<RS> resultType,
+            Supplier<ExecutionResult<RS>> action) {
         // A technical exception propagates from here: the caller's transaction rolls back,
         // no idempotency record and no business changes are committed, retry starts clean.
-        ExecutionResult<RS> result = Objects.requireNonNull(action.get(),
+        ExecutionResult<RS> result = Objects.requireNonNull(
+                action.get(),
                 "business action must not return null; use ExecutionResult.success(null) for void-like operations");
 
         Instant completedAt = clock.instant();
@@ -135,14 +137,16 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         ExecutionResult<RS> outcome;
         switch (result) {
             case Success<RS> success -> {
-                String payload = success.value() == null ? null
+                String payload = success.value() == null
+                        ? null
                         : new String(serializer.serialize(success.value()), StandardCharsets.UTF_8);
                 persistenceStore.complete(key, resultType.getName(), payload, completedAt);
                 terminal = processing.completed(resultType.getName(), payload, completedAt);
                 outcome = success;
             }
             case Rejected<RS> rejected -> {
-                String details = rejected.details().isNull() ? null : rejected.details().toString();
+                String details =
+                        rejected.details().isNull() ? null : rejected.details().toString();
                 persistenceStore.reject(key, rejected.errorCode(), details, completedAt);
                 terminal = processing.rejected(rejected.errorCode(), details, completedAt);
                 // Normalize the returned tree through the same serialize/parse round trip a
@@ -198,16 +202,18 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         metrics.replayed(record.status());
         return switch (record.status()) {
             case COMPLETED -> {
-                RS value = record.resultPayload() == null ? null
+                RS value = record.resultPayload() == null
+                        ? null
                         : serializer.deserialize(record.resultPayload().getBytes(StandardCharsets.UTF_8), resultType);
                 yield ExecutionResult.success(value);
             }
-            case REJECTED -> new Rejected<>(
-                    Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),
-                    Json.readTree(record.resultPayload()));
-            case PROCESSING -> throw new IllegalStateException(
-                    "Unexpected committed PROCESSING record for " + record.key()
-                            + "; with the same-transaction persistence model PROCESSING must never be visible");
+            case REJECTED ->
+                new Rejected<>(
+                        Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),
+                        Json.readTree(record.resultPayload()));
+            case PROCESSING ->
+                throw new IllegalStateException("Unexpected committed PROCESSING record for " + record.key()
+                        + "; with the same-transaction persistence model PROCESSING must never be visible");
         };
     }
 
@@ -242,8 +248,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                     promote(record);
                 }
             });
-        }
-        else {
+        } else {
             promote(record);
         }
     }
