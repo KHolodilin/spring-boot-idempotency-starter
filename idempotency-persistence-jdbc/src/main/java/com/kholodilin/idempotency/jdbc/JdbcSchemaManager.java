@@ -8,7 +8,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,9 +24,16 @@ public final class JdbcSchemaManager {
     private static final String SCHEMA_RESOURCE = "/com/kholodilin/idempotency/jdbc/idempotency-records.sql";
 
     private static final Set<String> REQUIRED_COLUMNS = Set.of(
-            "operation", "idempotency_key", "request_hash", "status",
-            "result_type", "result_payload", "error_code",
-            "created_at", "completed_at", "expires_at");
+            "operation",
+            "idempotency_key",
+            "request_hash",
+            "status",
+            "result_type",
+            "result_payload",
+            "error_code",
+            "created_at",
+            "completed_at",
+            "expires_at");
 
     private final JdbcClient jdbc;
     private final String tableName;
@@ -44,8 +50,7 @@ public final class JdbcSchemaManager {
         switch (mode) {
             case CREATE -> create();
             case VALIDATE -> validate();
-            case NONE -> {
-            }
+            case NONE -> {}
         }
     }
 
@@ -66,15 +71,12 @@ public final class JdbcSchemaManager {
         if (!Boolean.TRUE.equals(exists)) {
             throw new IllegalStateException(
                     ("Idempotency table '%s' does not exist. Create it from the canonical schema "
-                            + "(classpath:%s) or switch idempotency.persistence.schema.mode to 'create'.")
+                                    + "(classpath:%s) or switch idempotency.persistence.schema.mode to 'create'.")
                             .formatted(tableName, SCHEMA_RESOURCE));
         }
 
-        String unqualified = tableName.contains(".")
-                ? tableName.substring(tableName.indexOf('.') + 1)
-                : tableName;
-        List<String> columns = jdbc.sql(
-                        "SELECT column_name FROM information_schema.columns WHERE table_name = ?")
+        String unqualified = tableName.contains(".") ? tableName.substring(tableName.indexOf('.') + 1) : tableName;
+        List<String> columns = jdbc.sql("SELECT column_name FROM information_schema.columns WHERE table_name = ?")
                 .param(1, unqualified.toLowerCase(Locale.ROOT))
                 .query(String.class)
                 .list();
@@ -99,8 +101,7 @@ public final class JdbcSchemaManager {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8)
                     .replace("${TABLE}", table)
                     .replace("${INDEX_SUFFIX}", indexSuffix);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new IllegalStateException("Could not read canonical schema resource", e);
         }
     }

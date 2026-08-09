@@ -11,7 +11,6 @@ import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.LocalCache;
-
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -41,9 +40,8 @@ public final class CaffeineLocalCache implements LocalCache {
      */
     public CaffeineLocalCache(Duration ttl, long maxSize, boolean recordStatistics, @Nullable Ticker ticker) {
         Objects.requireNonNull(ttl, "ttl");
-        Caffeine<Object, Object> builder = Caffeine.newBuilder()
-                .expireAfterWrite(ttl)
-                .maximumSize(maxSize);
+        Caffeine<Object, Object> builder =
+                Caffeine.newBuilder().expireAfterWrite(ttl).maximumSize(maxSize);
         if (recordStatistics) {
             builder.recordStats();
         }

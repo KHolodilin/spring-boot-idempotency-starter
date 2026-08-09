@@ -4,7 +4,6 @@ import java.util.Objects;
 
 import com.kholodilin.idempotency.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 

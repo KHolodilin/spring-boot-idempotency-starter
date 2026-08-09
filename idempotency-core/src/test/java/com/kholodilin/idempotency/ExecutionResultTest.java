@@ -3,7 +3,6 @@ package com.kholodilin.idempotency;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.JsonNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,8 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ExecutionResultTest {
 
-    record Details(long amount, long balance) {
-    }
+    record Details(long amount, long balance) {}
 
     @Test
     void successCarriesValue() {

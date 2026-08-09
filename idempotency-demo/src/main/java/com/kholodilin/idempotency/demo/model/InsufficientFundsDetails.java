@@ -5,5 +5,4 @@ import java.math.BigDecimal;
 /**
  * Rejection details of the {@code INSUFFICIENT_FUNDS} business error.
  */
-public record InsufficientFundsDetails(BigDecimal requestedAmount, BigDecimal availableBalance) {
-}
+public record InsufficientFundsDetails(BigDecimal requestedAmount, BigDecimal availableBalance) {}

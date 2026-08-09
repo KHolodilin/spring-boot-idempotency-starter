@@ -1,7 +1,6 @@
 package com.kholodilin.idempotency.jackson;
 
 import org.jspecify.annotations.Nullable;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.NullNode;
@@ -18,8 +17,7 @@ public final class Json {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    private Json() {
-    }
+    private Json() {}
 
     public static JsonMapper mapper() {
         return MAPPER;

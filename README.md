@@ -1,5 +1,8 @@
 # Spring Boot Idempotency Starter
 
+[![CI](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Transactional idempotency for Spring Boot 4 / Java 21: a repeated request with the same
 `Idempotency-Key` does not execute the business operation again — it replays the stored
 outcome of the first execution, including deterministic business rejections.
@@ -49,26 +52,38 @@ Execution flow of `execute(...)`:
 
 ## Quick start
 
+Maven:
+
 ```xml
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
+```
+
+Gradle:
+
+```kotlin
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.0")
+
+// optional caches
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.0")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -310,3 +325,19 @@ dialect-agnostic.
 ```bash
 mvn clean verify     # integration tests require a running Docker daemon (Testcontainers)
 ```
+
+The build enforces code format (Spotless / Palantir Java Format — run `mvn spotless:apply`
+to fix), environment constraints (Maven Enforcer) and javadoc validity.
+
+## Releasing
+
+Push a tag — CI publishes signed artifacts to Maven Central and creates a GitHub Release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).

@@ -4,7 +4,6 @@ import java.util.Map;
 
 import com.kholodilin.idempotency.IdempotencyConflictException;
 import com.kholodilin.idempotency.IdempotencyRejectedException;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,9 +22,10 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(IdempotencyRejectedException.class)
     public ResponseEntity<?> onRejected(IdempotencyRejectedException e) {
-        return ResponseEntity.unprocessableEntity().body(Map.of(
-                "code", e.errorCode(),
-                "details", e.details()));
+        return ResponseEntity.unprocessableEntity()
+                .body(Map.of(
+                        "code", e.errorCode(),
+                        "details", e.details()));
     }
 
     /**
@@ -33,8 +33,7 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<?> onConflict(IdempotencyConflictException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                "code", "IDEMPOTENCY_KEY_CONFLICT",
-                "message", e.getMessage()));
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "IDEMPOTENCY_KEY_CONFLICT", "message", e.getMessage()));
     }
 }

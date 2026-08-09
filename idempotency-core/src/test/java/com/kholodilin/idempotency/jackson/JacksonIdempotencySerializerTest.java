@@ -11,8 +11,7 @@ class JacksonIdempotencySerializerTest {
 
     private final JacksonIdempotencySerializer serializer = new JacksonIdempotencySerializer();
 
-    record PaymentResult(String paymentId, BigDecimal amount) {
-    }
+    record PaymentResult(String paymentId, BigDecimal amount) {}
 
     @Test
     void roundTripsPojo() {
@@ -26,16 +25,19 @@ class JacksonIdempotencySerializerTest {
 
     @Test
     void serializesNullAsJsonNull() {
-        assertThat(new String(serializer.serialize(null), StandardCharsets.UTF_8)).isEqualTo("null");
+        assertThat(new String(serializer.serialize(null), StandardCharsets.UTF_8))
+                .isEqualTo("null");
     }
 
     @Test
     void deserializesJsonNullToNull() {
-        assertThat(serializer.deserialize("null".getBytes(StandardCharsets.UTF_8), PaymentResult.class)).isNull();
+        assertThat(serializer.deserialize("null".getBytes(StandardCharsets.UTF_8), PaymentResult.class))
+                .isNull();
     }
 
     @Test
     void voidTypeAlwaysDeserializesToNull() {
-        assertThat(serializer.deserialize("{}".getBytes(StandardCharsets.UTF_8), Void.class)).isNull();
+        assertThat(serializer.deserialize("{}".getBytes(StandardCharsets.UTF_8), Void.class))
+                .isNull();
     }
 }

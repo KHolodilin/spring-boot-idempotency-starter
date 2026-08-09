@@ -17,7 +17,6 @@ import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -77,7 +76,10 @@ class DemoSmokeTest {
     }
 
     private long paymentsCount() {
-        return JdbcClient.create(dataSource).sql("SELECT count(*) FROM payments").query(Long.class).single();
+        return JdbcClient.create(dataSource)
+                .sql("SELECT count(*) FROM payments")
+                .query(Long.class)
+                .single();
     }
 
     @Test
@@ -109,8 +111,7 @@ class DemoSmokeTest {
 
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(conflicting.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(JSON.readTree(conflicting.getBody()).get("code").asString())
-                .isEqualTo("IDEMPOTENCY_KEY_CONFLICT");
+        assertThat(JSON.readTree(conflicting.getBody()).get("code").asString()).isEqualTo("IDEMPOTENCY_KEY_CONFLICT");
     }
 
     @Test
@@ -129,7 +130,9 @@ class DemoSmokeTest {
             assertThat(json.get("details").get("availableBalance").decimalValue())
                     .isEqualByComparingTo("1000.00");
         }
-        assertThat(paymentsCount()).as("rejected operation must not create payments").isEqualTo(before);
+        assertThat(paymentsCount())
+                .as("rejected operation must not create payments")
+                .isEqualTo(before);
     }
 
     @Test
@@ -153,8 +156,7 @@ class DemoSmokeTest {
         ResponseEntity<String> rejected = post("/api/refunds", "smoke-ref-1", """
                 {"paymentId": "pay-1", "amount": 600.00}""");
         assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(JSON.readTree(rejected.getBody()).get("code").asString())
-                .isEqualTo("REFUND_LIMIT_EXCEEDED");
+        assertThat(JSON.readTree(rejected.getBody()).get("code").asString()).isEqualTo("REFUND_LIMIT_EXCEEDED");
 
         ResponseEntity<String> ok = post("/api/refunds", "smoke-ref-2", """
                 {"paymentId": "pay-1", "amount": 100.00}""");

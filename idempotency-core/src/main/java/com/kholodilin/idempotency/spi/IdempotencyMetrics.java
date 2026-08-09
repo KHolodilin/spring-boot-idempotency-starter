@@ -8,38 +8,32 @@ import com.kholodilin.idempotency.IdempotencyStatus;
  */
 public interface IdempotencyMetrics {
 
-    IdempotencyMetrics NOOP = new IdempotencyMetrics() {
-    };
+    IdempotencyMetrics NOOP = new IdempotencyMetrics() {};
 
     /**
      * A usable record was found at the given lookup level.
      *
      * @param level {@code local}, {@code distributed} or {@code persistence}
      */
-    default void lookupHit(String level) {
-    }
+    default void lookupHit(String level) {}
 
     /**
      * A stored outcome was replayed instead of executing the action.
      */
-    default void replayed(IdempotencyStatus status) {
-    }
+    default void replayed(IdempotencyStatus status) {}
 
     /**
      * Fingerprint mismatch: the key was reused with a different payload.
      */
-    default void conflict() {
-    }
+    default void conflict() {}
 
     /**
      * A new record was acquired and the business action is about to run.
      */
-    default void acquired() {
-    }
+    default void acquired() {}
 
     /**
      * A fresh outcome was persisted.
      */
-    default void persisted(IdempotencyStatus status) {
-    }
+    default void persisted(IdempotencyStatus status) {}
 }

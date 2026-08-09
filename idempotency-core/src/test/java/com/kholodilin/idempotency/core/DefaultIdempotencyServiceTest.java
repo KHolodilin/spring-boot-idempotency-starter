@@ -21,7 +21,6 @@ import com.kholodilin.idempotency.MissingTransactionException;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,14 +41,11 @@ class DefaultIdempotencyServiceTest {
     private static final String OPERATION = "CREATE_PAYMENT";
     private static final String KEY = "abc-123";
 
-    record Command(String orderId, BigDecimal amount) {
-    }
+    record Command(String orderId, BigDecimal amount) {}
 
-    record PaymentResult(String paymentId) {
-    }
+    record PaymentResult(String paymentId) {}
 
-    record Details(long amount, long balance) {
-    }
+    record Details(long amount, long balance) {}
 
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     private final InMemoryStore store = new InMemoryStore(clock);
@@ -68,9 +64,7 @@ class DefaultIdempotencyServiceTest {
     }
 
     private DefaultIdempotencyService.Builder serviceBuilder() {
-        return DefaultIdempotencyService.builder(store)
-                .clock(clock)
-                .requireActiveTransaction(false);
+        return DefaultIdempotencyService.builder(store).clock(clock).requireActiveTransaction(false);
     }
 
     private ExecutionResult<PaymentResult> countingAction() {
@@ -80,7 +74,8 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void firstExecutionRunsActionAndPersistsCompleted() {
-        DefaultIdempotencyService service = serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
 
         ExecutionResult<PaymentResult> result =
                 service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
@@ -112,16 +107,18 @@ class DefaultIdempotencyServiceTest {
     void rejectedOutcomeIsPersistedAndReplayedIdentically() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<PaymentResult> first = service.execute(OPERATION, KEY, command, PaymentResult.class,
+        ExecutionResult<PaymentResult> first = service.execute(
+                OPERATION,
+                KEY,
+                command,
+                PaymentResult.class,
                 () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200)));
 
-        ExecutionResult<PaymentResult> replayed = service.execute(OPERATION, KEY, command, PaymentResult.class,
-                () -> {
-                    throw new AssertionError("action must not run on replay");
-                });
+        ExecutionResult<PaymentResult> replayed = service.execute(OPERATION, KEY, command, PaymentResult.class, () -> {
+            throw new AssertionError("action must not run on replay");
+        });
 
-        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).status())
-                .isEqualTo(IdempotencyStatus.REJECTED);
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).status()).isEqualTo(IdempotencyStatus.REJECTED);
         Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
         Rejected<PaymentResult> replayedRejected = (Rejected<PaymentResult>) replayed;
         assertThat(replayedRejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
@@ -136,7 +133,8 @@ class DefaultIdempotencyServiceTest {
 
         Command otherPayload = new Command("o-1", new BigDecimal("999.00"));
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(
+                        () -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
                 .isInstanceOf(IdempotencyConflictException.class);
         assertThat(actionCalls).hasValue(1);
     }
@@ -149,20 +147,20 @@ class DefaultIdempotencyServiceTest {
         service.execute("CANCEL_ORDER", KEY, command, PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(2);
-        assertThat(store.data).containsKeys(
-                new IdempotencyKey("CREATE_ORDER", KEY), new IdempotencyKey("CANCEL_ORDER", KEY));
+        assertThat(store.data)
+                .containsKeys(new IdempotencyKey("CREATE_ORDER", KEY), new IdempotencyKey("CANCEL_ORDER", KEY));
     }
 
     @Test
     void technicalExceptionPropagatesAndNoTerminalStatusIsPersisted() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
 
         assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, () -> {
-            throw new IllegalStateException("SQL timeout");
-        })).isInstanceOf(IllegalStateException.class).hasMessage("SQL timeout");
+                    throw new IllegalStateException("SQL timeout");
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("SQL timeout");
 
         IdempotencyRecord record = store.data.get(new IdempotencyKey(OPERATION, KEY));
         assertThat(record.status()).isEqualTo(IdempotencyStatus.PROCESSING);
@@ -174,21 +172,22 @@ class DefaultIdempotencyServiceTest {
     void voidResultIsPersistedAndReplayed() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<Void> first = service.execute("PROCESS_EVENT", "evt-1", command, Void.class,
-                () -> ExecutionResult.success(null));
-        ExecutionResult<Void> replayed = service.execute("PROCESS_EVENT", "evt-1", command, Void.class,
-                () -> {
-                    throw new AssertionError("action must not run on replay");
-                });
+        ExecutionResult<Void> first =
+                service.execute("PROCESS_EVENT", "evt-1", command, Void.class, () -> ExecutionResult.success(null));
+        ExecutionResult<Void> replayed = service.execute("PROCESS_EVENT", "evt-1", command, Void.class, () -> {
+            throw new AssertionError("action must not run on replay");
+        });
 
         assertThat(first).isInstanceOf(Success.class);
         assertThat(((Success<Void>) replayed).value()).isNull();
-        assertThat(store.data.get(new IdempotencyKey("PROCESS_EVENT", "evt-1")).resultPayload()).isNull();
+        assertThat(store.data.get(new IdempotencyKey("PROCESS_EVENT", "evt-1")).resultPayload())
+                .isNull();
     }
 
     @Test
     void missingTransactionIsRejectedWhenRequired() {
-        DefaultIdempotencyService service = DefaultIdempotencyService.builder(store).clock(clock).build();
+        DefaultIdempotencyService service =
+                DefaultIdempotencyService.builder(store).clock(clock).build();
 
         assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
                 .isInstanceOf(MissingTransactionException.class);
@@ -208,10 +207,8 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void localCacheHitSkipsDistributedCacheAndPersistence() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
         IdempotencyRecord record = completedRecord();
         local.data.put(record.key(), record);
 
@@ -227,10 +224,8 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void distributedCacheHitIsPromotedToLocalCache() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
         IdempotencyRecord record = completedRecord();
         distributed.data.put(record.key(), record);
 
@@ -243,10 +238,8 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void persistenceHitIsPromotedToBothCaches() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
         IdempotencyRecord record = completedRecord();
         store.data.put(record.key(), record);
 
@@ -272,9 +265,16 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service = serviceBuilder().localCache(local).build();
         IdempotencyRecord expired = completedRecord()
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"old\"}", NOW.minusSeconds(7200));
-        expired = new IdempotencyRecord(expired.key(), expired.status(), expired.requestHash(),
-                expired.resultType(), expired.resultPayload(), null,
-                NOW.minusSeconds(7200), NOW.minusSeconds(7200), NOW.minusSeconds(3600));
+        expired = new IdempotencyRecord(
+                expired.key(),
+                expired.status(),
+                expired.requestHash(),
+                expired.resultType(),
+                expired.resultPayload(),
+                null,
+                NOW.minusSeconds(7200),
+                NOW.minusSeconds(7200),
+                NOW.minusSeconds(3600));
         local.data.put(expired.key(), expired);
 
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
@@ -291,17 +291,16 @@ class DefaultIdempotencyServiceTest {
 
         Command otherPayload = new Command("o-2", new BigDecimal("1.00"));
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(
+                        () -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
                 .isInstanceOf(IdempotencyConflictException.class);
         assertThat(store.findCalls).hasValue(0);
     }
 
     @Test
     void freshOutcomePopulatesCachesImmediatelyWithoutActiveSynchronization() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
 
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
@@ -312,17 +311,17 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void cachePopulationIsDeferredUntilAfterCommit() {
-        DefaultIdempotencyService service = serviceBuilder()
-                .localCache(local)
-                .distributedCache(distributed)
-                .build();
+        DefaultIdempotencyService service =
+                serviceBuilder().localCache(local).distributedCache(distributed).build();
 
         TransactionSynchronizationManager.initSynchronization();
         TransactionSynchronizationManager.setActualTransactionActive(true);
         try {
             service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
-            assertThat(local.data).as("cache must not contain uncommitted state").isEmpty();
+            assertThat(local.data)
+                    .as("cache must not contain uncommitted state")
+                    .isEmpty();
             assertThat(distributed.data).isEmpty();
 
             for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
@@ -332,8 +331,7 @@ class DefaultIdempotencyServiceTest {
             IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
             assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
             assertThat(distributed.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
-        }
-        finally {
+        } finally {
             TransactionSynchronizationManager.clearSynchronization();
             TransactionSynchronizationManager.setActualTransactionActive(false);
         }
@@ -346,7 +344,7 @@ class DefaultIdempotencyServiceTest {
         PersistenceStore racingStore = mock(PersistenceStore.class);
         IdempotencyRecord committedByOther = completedRecord();
         when(racingStore.find(any()))
-                .thenReturn(Optional.empty())               // initial lookup
+                .thenReturn(Optional.empty()) // initial lookup
                 .thenReturn(Optional.of(committedByOther)); // after lost acquire
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
@@ -367,8 +365,8 @@ class DefaultIdempotencyServiceTest {
         PersistenceStore racingStore = mock(PersistenceStore.class);
         when(racingStore.find(any())).thenReturn(Optional.empty());
         when(racingStore.acquire(any(), any(), any(), any()))
-                .thenReturn(false)  // lost the race
-                .thenReturn(true);  // concurrent transaction rolled back, second attempt wins
+                .thenReturn(false) // lost the race
+                .thenReturn(true); // concurrent transaction rolled back, second attempt wins
 
         DefaultIdempotencyService service = DefaultIdempotencyService.builder(racingStore)
                 .clock(clock)
@@ -388,10 +386,9 @@ class DefaultIdempotencyServiceTest {
     private IdempotencyRecord completedRecord() {
         DefaultIdempotencyService probe = serviceBuilder().build();
         // fingerprint must match what the service calculates for `command`
-        String fingerprint = new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy()
-                .calculate(command);
-        return IdempotencyRecord
-                .processing(new IdempotencyKey(OPERATION, KEY), fingerprint, NOW.minusSeconds(60), null)
+        String fingerprint =
+                new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy().calculate(command);
+        return IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), fingerprint, NOW.minusSeconds(60), null)
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"pay-42\"}", NOW.minusSeconds(60));
     }
 

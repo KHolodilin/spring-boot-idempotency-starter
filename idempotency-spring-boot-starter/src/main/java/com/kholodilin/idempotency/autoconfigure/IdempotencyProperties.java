@@ -3,7 +3,6 @@ package com.kholodilin.idempotency.autoconfigure;
 import java.time.Duration;
 
 import com.kholodilin.idempotency.jdbc.SchemaMode;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**

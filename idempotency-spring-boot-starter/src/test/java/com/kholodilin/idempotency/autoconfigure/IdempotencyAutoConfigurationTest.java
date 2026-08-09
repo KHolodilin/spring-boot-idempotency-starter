@@ -3,7 +3,6 @@ package com.kholodilin.idempotency.autoconfigure;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
-
 import javax.sql.DataSource;
 
 import com.kholodilin.idempotency.IdempotencyKey;
@@ -19,10 +18,8 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -44,8 +41,7 @@ class IdempotencyAutoConfigurationTest {
                     IdempotencyAutoConfiguration.class));
 
     private ApplicationContextRunner withDataSource() {
-        return runner
-                .withBean(DataSource.class, () -> mock(DataSource.class))
+        return runner.withBean(DataSource.class, () -> mock(DataSource.class))
                 .withPropertyValues("idempotency.persistence.schema.mode=none");
     }
 
@@ -69,8 +65,8 @@ class IdempotencyAutoConfigurationTest {
 
     @Test
     void caffeineLocalCacheIsAutoConfiguredFromClasspath() {
-        withDataSource().run(context ->
-                assertThat(context.getBean(LocalCache.class)).isInstanceOf(CaffeineLocalCache.class));
+        withDataSource()
+                .run(context -> assertThat(context.getBean(LocalCache.class)).isInstanceOf(CaffeineLocalCache.class));
     }
 
     @Test
@@ -101,8 +97,7 @@ class IdempotencyAutoConfigurationTest {
                 .withBean(DataSource.class, () -> mock(DataSource.class))
                 .withPropertyValues("idempotency.persistence.schema.mode=none")
                 .run(context ->
-                        assertThat(context.getBean(DistributedCache.class))
-                                .isInstanceOf(RedisDistributedCache.class));
+                        assertThat(context.getBean(DistributedCache.class)).isInstanceOf(RedisDistributedCache.class));
     }
 
     @Test
@@ -110,8 +105,7 @@ class IdempotencyAutoConfigurationTest {
         withDataSource()
                 .withBean(RedisConnectionFactory.class, () -> mock(RedisConnectionFactory.class))
                 .run(context ->
-                        assertThat(context.getBean(DistributedCache.class))
-                                .isInstanceOf(RedisDistributedCache.class));
+                        assertThat(context.getBean(DistributedCache.class)).isInstanceOf(RedisDistributedCache.class));
     }
 
     @Test
@@ -134,36 +128,30 @@ class IdempotencyAutoConfigurationTest {
 
     @Test
     void masterSwitchDisablesEverything() {
-        withDataSource()
-                .withPropertyValues("idempotency.enabled=false")
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(IdempotencyService.class);
-                    assertThat(context).doesNotHaveBean(PersistenceStore.class);
-                    assertThat(context).doesNotHaveBean(LocalCache.class);
-                });
+        withDataSource().withPropertyValues("idempotency.enabled=false").run(context -> {
+            assertThat(context).doesNotHaveBean(IdempotencyService.class);
+            assertThat(context).doesNotHaveBean(PersistenceStore.class);
+            assertThat(context).doesNotHaveBean(LocalCache.class);
+        });
     }
 
     @Test
     void metricsAreMicrometerBasedWhenMeterRegistryExists() {
-        withDataSource()
-                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
-                .run(context ->
-                        assertThat(context.getBean(IdempotencyMetrics.class))
-                                .isInstanceOf(MicrometerIdempotencyMetrics.class));
+        withDataSource().withBean(MeterRegistry.class, SimpleMeterRegistry::new).run(context -> assertThat(
+                        context.getBean(IdempotencyMetrics.class))
+                .isInstanceOf(MicrometerIdempotencyMetrics.class));
     }
 
     @Test
     void customBeansTakePrecedenceOverDefaults() {
-        withDataSource()
-                .withUserConfiguration(CustomBeansConfiguration.class)
-                .run(context -> {
-                    assertThat(context.getBean(FingerprintStrategy.class))
-                            .isSameAs(context.getBean(CustomBeansConfiguration.class).fingerprint);
-                    assertThat(context.getBean(PersistenceStore.class))
-                            .isSameAs(context.getBean(CustomBeansConfiguration.class).store);
-                    assertThat(context).doesNotHaveBean(JdbcPersistenceStore.class);
-                    assertThat(context).hasSingleBean(IdempotencyService.class);
-                });
+        withDataSource().withUserConfiguration(CustomBeansConfiguration.class).run(context -> {
+            assertThat(context.getBean(FingerprintStrategy.class))
+                    .isSameAs(context.getBean(CustomBeansConfiguration.class).fingerprint);
+            assertThat(context.getBean(PersistenceStore.class))
+                    .isSameAs(context.getBean(CustomBeansConfiguration.class).store);
+            assertThat(context).doesNotHaveBean(JdbcPersistenceStore.class);
+            assertThat(context).hasSingleBean(IdempotencyService.class);
+        });
     }
 
     @Test
@@ -185,10 +173,12 @@ class IdempotencyAutoConfigurationTest {
                     assertThat(properties.getLocalCache().getMaxSize()).isEqualTo(42);
                     assertThat(properties.getDistributedCache().getTtl()).isEqualTo(Duration.ofHours(2));
                     assertThat(properties.getDistributedCache().getKeyPrefix()).isEqualTo("custom:");
-                    assertThat(properties.getDistributedCache().getFailurePolicy()).isEqualTo("fail-fast");
+                    assertThat(properties.getDistributedCache().getFailurePolicy())
+                            .isEqualTo("fail-fast");
                     assertThat(properties.getPersistence().getTableName()).isEqualTo("custom_records");
                     assertThat(properties.getPersistence().getTtl()).isEqualTo(Duration.ofHours(48));
-                    assertThat(properties.getPersistence().getSchema().getMode()).isEqualTo(SchemaMode.NONE);
+                    assertThat(properties.getPersistence().getSchema().getMode())
+                            .isEqualTo(SchemaMode.NONE);
                 });
     }
 
@@ -209,12 +199,10 @@ class IdempotencyAutoConfigurationTest {
             }
 
             @Override
-            public void complete(IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {
-            }
+            public void complete(IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {}
 
             @Override
-            public void reject(IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {
-            }
+            public void reject(IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {}
         };
 
         @Bean

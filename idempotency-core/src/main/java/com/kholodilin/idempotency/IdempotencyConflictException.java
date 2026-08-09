@@ -11,9 +11,7 @@ public class IdempotencyConflictException extends IdempotencyException {
     private final String storedFingerprint;
     private final String requestFingerprint;
 
-    public IdempotencyConflictException(IdempotencyKey key,
-                                        String storedFingerprint,
-                                        String requestFingerprint) {
+    public IdempotencyConflictException(IdempotencyKey key, String storedFingerprint, String requestFingerprint) {
         super("Idempotency key '%s' of operation '%s' was already used with a different request payload"
                 .formatted(key.key(), key.operation()));
         this.key = key;

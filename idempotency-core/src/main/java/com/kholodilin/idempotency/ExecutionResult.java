@@ -4,9 +4,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import com.kholodilin.idempotency.jackson.Json;
-
 import org.jspecify.annotations.Nullable;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.NullNode;
 
@@ -31,8 +29,7 @@ public sealed interface ExecutionResult<RS> permits ExecutionResult.Success, Exe
      * Successful outcome. {@code value} may be {@code null} for void-like operations
      * (e.g. Kafka event processing).
      */
-    record Success<RS>(@Nullable RS value) implements ExecutionResult<RS> {
-    }
+    record Success<RS>(@Nullable RS value) implements ExecutionResult<RS> {}
 
     /**
      * Deterministic business rejection outcome.
@@ -89,8 +86,7 @@ public sealed interface ExecutionResult<RS> permits ExecutionResult.Success, Exe
     /**
      * Functional dispatch without an explicit {@code switch}.
      */
-    default <T> T fold(Function<? super RS, ? extends T> onSuccess,
-                       Function<Rejected<RS>, ? extends T> onRejected) {
+    default <T> T fold(Function<? super RS, ? extends T> onSuccess, Function<Rejected<RS>, ? extends T> onRejected) {
         return switch (this) {
             case Success<RS> s -> onSuccess.apply(s.value());
             case Rejected<RS> r -> onRejected.apply(r);

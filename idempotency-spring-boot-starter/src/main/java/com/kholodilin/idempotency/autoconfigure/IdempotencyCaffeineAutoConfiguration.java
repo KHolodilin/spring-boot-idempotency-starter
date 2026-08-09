@@ -2,7 +2,6 @@ package com.kholodilin.idempotency.autoconfigure;
 
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.spi.LocalCache;
-
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

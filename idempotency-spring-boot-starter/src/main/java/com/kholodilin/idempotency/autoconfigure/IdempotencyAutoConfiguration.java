@@ -10,7 +10,6 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -24,12 +23,13 @@ import org.springframework.context.annotation.Bean;
  * and the {@link IdempotencyService} itself. Every default backs off when the application
  * provides its own bean of the same SPI type.
  */
-@AutoConfiguration(after = {
-        IdempotencyJdbcAutoConfiguration.class,
-        IdempotencyCaffeineAutoConfiguration.class,
-        IdempotencyRedisAutoConfiguration.class,
-        IdempotencyMetricsAutoConfiguration.class
-})
+@AutoConfiguration(
+        after = {
+            IdempotencyJdbcAutoConfiguration.class,
+            IdempotencyCaffeineAutoConfiguration.class,
+            IdempotencyRedisAutoConfiguration.class,
+            IdempotencyMetricsAutoConfiguration.class
+        })
 @ConditionalOnProperty(name = "idempotency.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyAutoConfiguration {
@@ -49,13 +49,14 @@ public class IdempotencyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(IdempotencyService.class)
     @ConditionalOnBean(PersistenceStore.class)
-    public IdempotencyService idempotencyService(IdempotencyProperties properties,
-                                                 PersistenceStore persistenceStore,
-                                                 FingerprintStrategy fingerprintStrategy,
-                                                 IdempotencySerializer serializer,
-                                                 ObjectProvider<LocalCache> localCache,
-                                                 ObjectProvider<DistributedCache> distributedCache,
-                                                 ObjectProvider<IdempotencyMetrics> metrics) {
+    public IdempotencyService idempotencyService(
+            IdempotencyProperties properties,
+            PersistenceStore persistenceStore,
+            FingerprintStrategy fingerprintStrategy,
+            IdempotencySerializer serializer,
+            ObjectProvider<LocalCache> localCache,
+            ObjectProvider<DistributedCache> distributedCache,
+            ObjectProvider<IdempotencyMetrics> metrics) {
         return DefaultIdempotencyService.builder(persistenceStore)
                 .fingerprintStrategy(fingerprintStrategy)
                 .serializer(serializer)

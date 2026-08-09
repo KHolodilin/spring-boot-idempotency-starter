@@ -9,14 +9,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.Optional;
-
 import javax.sql.DataSource;
 
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -109,8 +107,8 @@ public final class JdbcPersistenceStore implements PersistenceStore {
     }
 
     @Override
-    public void complete(IdempotencyKey key, @Nullable String resultType, @Nullable String resultPayload,
-                         Instant completedAt) {
+    public void complete(
+            IdempotencyKey key, @Nullable String resultType, @Nullable String resultPayload, Instant completedAt) {
         int rows = jdbc.sql(completeSql)
                 .param(1, resultType, Types.VARCHAR)
                 .param(2, resultPayload, Types.VARCHAR)

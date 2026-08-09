@@ -8,13 +8,11 @@ import java.util.function.Supplier;
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.DistributedCache;
-
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -43,10 +41,11 @@ public final class RedisDistributedCache implements DistributedCache {
         this(connectionFactory, DEFAULT_KEY_PREFIX, DEFAULT_TTL, RedisCacheFailurePolicy.FAIL_OPEN);
     }
 
-    public RedisDistributedCache(RedisConnectionFactory connectionFactory,
-                                 String keyPrefix,
-                                 Duration ttl,
-                                 RedisCacheFailurePolicy failurePolicy) {
+    public RedisDistributedCache(
+            RedisConnectionFactory connectionFactory,
+            String keyPrefix,
+            Duration ttl,
+            RedisCacheFailurePolicy failurePolicy) {
         Objects.requireNonNull(connectionFactory, "connectionFactory");
         this.redis = new StringRedisTemplate(connectionFactory);
         this.keyPrefix = Objects.requireNonNull(keyPrefix, "keyPrefix");
@@ -56,29 +55,41 @@ public final class RedisDistributedCache implements DistributedCache {
 
     @Override
     public Optional<IdempotencyRecord> get(IdempotencyKey key) {
-        return guarded("get", key, () -> {
-            String json = redis.opsForValue().get(redisKey(key));
-            if (json == null) {
-                return Optional.empty();
-            }
-            return Optional.of(MAPPER.readValue(json, IdempotencyRecord.class));
-        }, Optional.empty());
+        return guarded(
+                "get",
+                key,
+                () -> {
+                    String json = redis.opsForValue().get(redisKey(key));
+                    if (json == null) {
+                        return Optional.empty();
+                    }
+                    return Optional.of(MAPPER.readValue(json, IdempotencyRecord.class));
+                },
+                Optional.empty());
     }
 
     @Override
     public void put(IdempotencyKey key, IdempotencyRecord record) {
-        guarded("put", key, () -> {
-            redis.opsForValue().set(redisKey(key), MAPPER.writeValueAsString(record), ttl);
-            return null;
-        }, null);
+        guarded(
+                "put",
+                key,
+                () -> {
+                    redis.opsForValue().set(redisKey(key), MAPPER.writeValueAsString(record), ttl);
+                    return null;
+                },
+                null);
     }
 
     @Override
     public void evict(IdempotencyKey key) {
-        guarded("evict", key, () -> {
-            redis.delete(redisKey(key));
-            return null;
-        }, null);
+        guarded(
+                "evict",
+                key,
+                () -> {
+                    redis.delete(redisKey(key));
+                    return null;
+                },
+                null);
     }
 
     String redisKey(IdempotencyKey key) {
@@ -88,13 +99,15 @@ public final class RedisDistributedCache implements DistributedCache {
     private <T> T guarded(String operation, IdempotencyKey key, Supplier<T> body, @Nullable T fallback) {
         try {
             return body.get();
-        }
-        catch (RuntimeException e) {
+        } catch (RuntimeException e) {
             if (failurePolicy == RedisCacheFailurePolicy.FAIL_FAST) {
                 throw e;
             }
-            log.warn("Redis idempotency cache {} failed for {}; continuing without distributed cache (fail-open)",
-                    operation, key, e);
+            log.warn(
+                    "Redis idempotency cache {} failed for {}; continuing without distributed cache (fail-open)",
+                    operation,
+                    key,
+                    e);
             return fallback;
         }
     }

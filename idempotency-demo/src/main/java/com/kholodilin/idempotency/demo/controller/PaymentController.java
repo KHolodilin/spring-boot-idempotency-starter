@@ -6,7 +6,6 @@ import com.kholodilin.idempotency.demo.model.CreatePaymentRequest;
 import com.kholodilin.idempotency.demo.model.PaymentResult;
 import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.service.PaymentService;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,8 +32,8 @@ public class PaymentController {
      */
     @PostMapping("/payments")
     @ResponseStatus(HttpStatus.CREATED)
-    public PaymentResult createPayment(@RequestHeader("Idempotency-Key") String idempotencyKey,
-                                       @RequestBody CreatePaymentRequest request) {
+    public PaymentResult createPayment(
+            @RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody CreatePaymentRequest request) {
         return paymentService.createPayment(idempotencyKey, request).valueOrThrow();
     }
 
@@ -43,12 +42,13 @@ public class PaymentController {
      * endpoint needs a non-standard rejection response.
      */
     @PostMapping("/refunds")
-    public ResponseEntity<?> refund(@RequestHeader("Idempotency-Key") String idempotencyKey,
-                                    @RequestBody RefundRequest request) {
-        return paymentService.refund(idempotencyKey, request).fold(
-                ResponseEntity::ok,
-                rejected -> ResponseEntity.unprocessableEntity().body(Map.of(
-                        "code", rejected.errorCode(),
-                        "details", rejected.details())));
+    public ResponseEntity<?> refund(
+            @RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody RefundRequest request) {
+        return paymentService
+                .refund(idempotencyKey, request)
+                .fold(ResponseEntity::ok, rejected -> ResponseEntity.unprocessableEntity()
+                        .body(Map.of(
+                                "code", rejected.errorCode(),
+                                "details", rejected.details())));
     }
 }
