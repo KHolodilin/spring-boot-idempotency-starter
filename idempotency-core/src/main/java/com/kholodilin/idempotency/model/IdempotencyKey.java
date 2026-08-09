@@ -1,4 +1,4 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.model;
 
 /**
  * Identity of an idempotent operation execution: {@code operation + idempotencyKey}.

@@ -3,8 +3,8 @@ package com.kholodilin.idempotency.spi;
 import java.time.Instant;
 import java.util.Optional;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 import org.jspecify.annotations.Nullable;
 
 /**

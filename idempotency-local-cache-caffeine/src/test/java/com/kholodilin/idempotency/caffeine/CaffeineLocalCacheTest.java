@@ -5,9 +5,9 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.github.benmanes.caffeine.cache.Ticker;
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

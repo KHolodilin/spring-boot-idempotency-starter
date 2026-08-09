@@ -5,12 +5,12 @@ import java.time.Instant;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.jdbc.JdbcPersistenceStore;
 import com.kholodilin.idempotency.jdbc.SchemaMode;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.redis.RedisDistributedCache;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.FingerprintStrategy;

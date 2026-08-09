@@ -11,9 +11,9 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.PersistenceStore;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;

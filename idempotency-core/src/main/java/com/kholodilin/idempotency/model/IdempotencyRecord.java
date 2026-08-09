@@ -1,4 +1,4 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.model;
 
 import java.time.Instant;
 import java.util.Objects;

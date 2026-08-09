@@ -5,8 +5,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;

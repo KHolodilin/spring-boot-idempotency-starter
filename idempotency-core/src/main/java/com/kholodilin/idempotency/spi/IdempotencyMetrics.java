@@ -1,6 +1,6 @@
 package com.kholodilin.idempotency.spi;
 
-import com.kholodilin.idempotency.IdempotencyStatus;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 
 /**
  * Observability hook. A no-op implementation is used unless something better

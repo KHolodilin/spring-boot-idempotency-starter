@@ -4,9 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import org.junit.jupiter.api.AfterAll;

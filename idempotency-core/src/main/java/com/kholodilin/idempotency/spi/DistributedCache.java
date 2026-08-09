@@ -2,8 +2,8 @@ package com.kholodilin.idempotency.spi;
 
 import java.util.Optional;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 
 /**
  * Optional L2 (shared between application instances) cache of committed idempotency
