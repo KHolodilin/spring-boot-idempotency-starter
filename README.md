@@ -1,6 +1,9 @@
 # Spring Boot Idempotency Starter
 
 [![CI](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter/branch/main/graph/badge.svg)](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Transactional idempotency for Spring Boot 4 / Java 21: a repeated request with the same
@@ -327,7 +330,9 @@ mvn clean verify     # integration tests require a running Docker daemon (Testco
 ```
 
 The build enforces code format (Spotless / Palantir Java Format — run `mvn spotless:apply`
-to fix), environment constraints (Maven Enforcer) and javadoc validity.
+to fix), environment constraints (Maven Enforcer), javadoc validity and a minimum of
+80% line coverage per library module (JaCoCo; the HTML report lands in
+`<module>/target/site/jacoco/index.html`).
 
 ## Releasing
 

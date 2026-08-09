@@ -18,6 +18,8 @@
     <properties>
         <!-- the demo application is not published to Maven Central -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- demo is an application, not a library: no coverage requirements -->
+        <jacoco.skip>true</jacoco.skip>
     </properties>
 
     <dependencies>
