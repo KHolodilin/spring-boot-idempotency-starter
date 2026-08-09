@@ -23,9 +23,8 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import org.jspecify.annotations.Nullable;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Default {@link IdempotencyService} implementation.
@@ -52,6 +51,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     private final Clock clock;
     private final @Nullable Duration persistenceTtl;
     private final boolean requireActiveTransaction;
+    private final TransactionContext transactionContext;
 
     DefaultIdempotencyService(DefaultIdempotencyServiceBuilder builder) {
         this.persistenceStore = builder.persistenceStore;
@@ -63,6 +63,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         this.clock = builder.clock;
         this.persistenceTtl = builder.persistenceTtl;
         this.requireActiveTransaction = builder.requireActiveTransaction;
+        this.transactionContext = builder.transactionContext;
     }
 
     @Override
@@ -76,7 +77,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         Objects.requireNonNull(action, "action");
         IdempotencyKey key = new IdempotencyKey(operation, idempotencyKey);
 
-        if (requireActiveTransaction && !TransactionSynchronizationManager.isActualTransactionActive()) {
+        if (requireActiveTransaction && !transactionContext.isActive()) {
             throw new MissingTransactionException(key);
         }
 
@@ -235,15 +236,6 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         if (localCache == null && distributedCache == null) {
             return;
         }
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    promote(record);
-                }
-            });
-        } else {
-            promote(record);
-        }
+        transactionContext.afterCommit(() -> promote(record));
     }
 }

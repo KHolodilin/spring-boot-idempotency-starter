@@ -18,6 +18,7 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,7 @@ class IdempotencyAutoConfigurationTest {
             assertThat(context).hasSingleBean(FingerprintStrategy.class);
             assertThat(context).hasSingleBean(IdempotencySerializer.class);
             assertThat(context.getBean(PersistenceStore.class)).isInstanceOf(JdbcPersistenceStore.class);
+            assertThat(context.getBean(TransactionContext.class)).isInstanceOf(SpringTransactionContext.class);
         });
     }
 

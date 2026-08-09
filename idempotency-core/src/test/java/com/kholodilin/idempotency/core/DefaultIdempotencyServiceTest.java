@@ -5,7 +5,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,11 +23,8 @@ import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,15 +52,6 @@ class DefaultIdempotencyServiceTest {
     private final InMemoryCache distributed = new InMemoryCache();
     private final Command command = new Command("o-1", new BigDecimal("10.00"));
     private final AtomicInteger actionCalls = new AtomicInteger();
-
-    @BeforeEach
-    @AfterEach
-    void cleanTransactionState() {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-        TransactionSynchronizationManager.setActualTransactionActive(false);
-    }
 
     private DefaultIdempotencyServiceBuilder serviceBuilder() {
         return new DefaultIdempotencyServiceBuilder(store).clock(clock).requireActiveTransaction(false);
@@ -186,8 +176,21 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void missingTransactionIsRejectedWhenRequired() {
-        DefaultIdempotencyService service =
-                new DefaultIdempotencyServiceBuilder(store).clock(clock).build();
+        TransactionContext inactive = new TransactionContext() {
+            @Override
+            public boolean isActive() {
+                return false;
+            }
+
+            @Override
+            public void afterCommit(Runnable action) {
+                action.run();
+            }
+        };
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .clock(clock)
+                .transactionContext(inactive)
+                .build();
 
         assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
                 .isInstanceOf(MissingTransactionException.class);
@@ -311,30 +314,35 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void cachePopulationIsDeferredUntilAfterCommit() {
-        DefaultIdempotencyService service =
-                serviceBuilder().localCache(local).distributedCache(distributed).build();
-
-        TransactionSynchronizationManager.initSynchronization();
-        TransactionSynchronizationManager.setActualTransactionActive(true);
-        try {
-            service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
-
-            assertThat(local.data)
-                    .as("cache must not contain uncommitted state")
-                    .isEmpty();
-            assertThat(distributed.data).isEmpty();
-
-            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
-                synchronization.afterCommit();
+        List<Runnable> deferred = new ArrayList<>();
+        TransactionContext capturing = new TransactionContext() {
+            @Override
+            public boolean isActive() {
+                return true;
             }
 
-            IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
-            assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
-            assertThat(distributed.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-            TransactionSynchronizationManager.setActualTransactionActive(false);
-        }
+            @Override
+            public void afterCommit(Runnable action) {
+                deferred.add(action);
+            }
+        };
+        DefaultIdempotencyService service = serviceBuilder()
+                .localCache(local)
+                .distributedCache(distributed)
+                .transactionContext(capturing)
+                .build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(local.data).as("cache must not contain uncommitted state").isEmpty();
+        assertThat(distributed.data).isEmpty();
+        assertThat(deferred).hasSize(1);
+
+        deferred.forEach(Runnable::run);
+
+        IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
+        assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
+        assertThat(distributed.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
     }
 
     // ---------------------------------------------------------------- concurrency edges

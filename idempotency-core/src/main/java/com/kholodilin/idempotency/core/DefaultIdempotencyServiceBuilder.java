@@ -12,6 +12,7 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -36,6 +37,8 @@ public final class DefaultIdempotencyServiceBuilder {
     @Nullable Duration persistenceTtl;
 
     boolean requireActiveTransaction = true;
+
+    TransactionContext transactionContext = TransactionContext.IMMEDIATE;
 
     public DefaultIdempotencyServiceBuilder(PersistenceStore persistenceStore) {
         this.persistenceStore = Objects.requireNonNull(persistenceStore, "persistenceStore");
@@ -85,6 +88,11 @@ public final class DefaultIdempotencyServiceBuilder {
      */
     public DefaultIdempotencyServiceBuilder requireActiveTransaction(boolean requireActiveTransaction) {
         this.requireActiveTransaction = requireActiveTransaction;
+        return this;
+    }
+
+    public DefaultIdempotencyServiceBuilder transactionContext(TransactionContext transactionContext) {
+        this.transactionContext = Objects.requireNonNull(transactionContext);
         return this;
     }
 
