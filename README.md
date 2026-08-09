@@ -119,6 +119,9 @@ public class PaymentService {
 ### Controller: `valueOrThrow()` + a global handler
 
 ```java
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
+
 @PostMapping("/payments")
 @ResponseStatus(HttpStatus.CREATED)
 PaymentResult create(@RequestHeader("Idempotency-Key") String key,

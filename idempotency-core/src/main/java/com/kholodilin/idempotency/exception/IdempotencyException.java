@@ -1,4 +1,4 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.exception;
 
 /**
  * Base class for exceptions thrown by the idempotency library itself.

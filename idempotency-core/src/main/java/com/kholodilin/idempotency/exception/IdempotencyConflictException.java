@@ -1,4 +1,6 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.exception;
+
+import com.kholodilin.idempotency.IdempotencyKey;
 
 /**
  * Thrown when an idempotency key is reused for the same operation with a different

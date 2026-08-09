@@ -1,4 +1,7 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.exception;
+
+import com.kholodilin.idempotency.IdempotencyKey;
+import com.kholodilin.idempotency.IdempotencyService;
 
 /**
  * Thrown when {@link IdempotencyService#execute} is invoked without an active database
