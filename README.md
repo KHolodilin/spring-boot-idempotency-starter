@@ -61,32 +61,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.1")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.1")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.1")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -339,8 +339,8 @@ to fix), environment constraints (Maven Enforcer), javadoc validity and a minimu
 Push a tag — CI publishes signed artifacts to Maven Central and creates a GitHub Release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 ## License

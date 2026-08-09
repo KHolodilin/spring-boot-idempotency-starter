@@ -225,8 +225,9 @@
                 <extensions>true</extensions>
                 <configuration>
                     <publishingServerId>central</publishingServerId>
-                    <!-- manual "Publish" button in the Central Portal after validation -->
-                    <autoPublish>false</autoPublish>
+                    <!-- upload + publish to Maven Central on release (release.yml only runs deploy) -->
+                    <autoPublish>true</autoPublish>
+                    <waitUntil>published</waitUntil>
                 </configuration>
             </plugin>
 
