@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.core.DefaultIdempotencyService;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
@@ -73,7 +74,7 @@ class RedisCacheAsideIntegrationTest {
     }
 
     private DefaultIdempotencyService service(CaffeineLocalCache caffeine, RedisDistributedCache redis) {
-        return DefaultIdempotencyService.builder(store)
+        return new DefaultIdempotencyServiceBuilder(store)
                 .localCache(caffeine)
                 .distributedCache(redis)
                 .requireActiveTransaction(false)
@@ -120,7 +121,7 @@ class RedisCacheAsideIntegrationTest {
     @Test
     void persistenceHitIsPromotedToRedisAndCaffeine() {
         // outcome exists only in persistence (e.g. caches were cold-restarted)
-        DefaultIdempotencyService noCacheService = DefaultIdempotencyService.builder(store)
+        DefaultIdempotencyService noCacheService = new DefaultIdempotencyServiceBuilder(store)
                 .requireActiveTransaction(false)
                 .build();
         noCacheService.execute("CREATE_PAYMENT", "cold-1", "req", PaymentResult.class, this::action);

@@ -14,8 +14,6 @@ import com.kholodilin.idempotency.ExecutionResult.Success;
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.jackson.Json;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
@@ -55,7 +53,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     private final @Nullable Duration persistenceTtl;
     private final boolean requireActiveTransaction;
 
-    private DefaultIdempotencyService(Builder builder) {
+    DefaultIdempotencyService(DefaultIdempotencyServiceBuilder builder) {
         this.persistenceStore = builder.persistenceStore;
         this.fingerprintStrategy = builder.fingerprintStrategy;
         this.serializer = builder.serializer;
@@ -65,10 +63,6 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         this.clock = builder.clock;
         this.persistenceTtl = builder.persistenceTtl;
         this.requireActiveTransaction = builder.requireActiveTransaction;
-    }
-
-    public static Builder builder(PersistenceStore persistenceStore) {
-        return new Builder(persistenceStore);
     }
 
     @Override
@@ -250,74 +244,6 @@ public final class DefaultIdempotencyService implements IdempotencyService {
             });
         } else {
             promote(record);
-        }
-    }
-
-    public static final class Builder {
-
-        private final PersistenceStore persistenceStore;
-        private FingerprintStrategy fingerprintStrategy = new CanonicalJsonFingerprintStrategy();
-        private IdempotencySerializer serializer = new JacksonIdempotencySerializer();
-        private @Nullable LocalCache localCache;
-        private @Nullable DistributedCache distributedCache;
-        private IdempotencyMetrics metrics = IdempotencyMetrics.NOOP;
-        private Clock clock = Clock.systemUTC();
-        private @Nullable Duration persistenceTtl;
-        private boolean requireActiveTransaction = true;
-
-        private Builder(PersistenceStore persistenceStore) {
-            this.persistenceStore = Objects.requireNonNull(persistenceStore, "persistenceStore");
-        }
-
-        public Builder fingerprintStrategy(FingerprintStrategy fingerprintStrategy) {
-            this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy);
-            return this;
-        }
-
-        public Builder serializer(IdempotencySerializer serializer) {
-            this.serializer = Objects.requireNonNull(serializer);
-            return this;
-        }
-
-        public Builder localCache(@Nullable LocalCache localCache) {
-            this.localCache = localCache;
-            return this;
-        }
-
-        public Builder distributedCache(@Nullable DistributedCache distributedCache) {
-            this.distributedCache = distributedCache;
-            return this;
-        }
-
-        public Builder metrics(IdempotencyMetrics metrics) {
-            this.metrics = Objects.requireNonNull(metrics);
-            return this;
-        }
-
-        public Builder clock(Clock clock) {
-            this.clock = Objects.requireNonNull(clock);
-            return this;
-        }
-
-        /**
-         * How long a stored outcome stays replayable. {@code null} means no expiration.
-         */
-        public Builder persistenceTtl(@Nullable Duration persistenceTtl) {
-            this.persistenceTtl = persistenceTtl;
-            return this;
-        }
-
-        /**
-         * Disable only in tests: without a surrounding transaction atomicity of business
-         * state and idempotency state is not guaranteed.
-         */
-        public Builder requireActiveTransaction(boolean requireActiveTransaction) {
-            this.requireActiveTransaction = requireActiveTransaction;
-            return this;
-        }
-
-        public DefaultIdempotencyService build() {
-            return new DefaultIdempotencyService(this);
         }
     }
 }

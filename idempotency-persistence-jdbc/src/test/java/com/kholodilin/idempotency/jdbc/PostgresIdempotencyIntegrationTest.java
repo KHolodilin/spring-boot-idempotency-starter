@@ -19,6 +19,7 @@ import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
 import com.kholodilin.idempotency.core.DefaultIdempotencyService;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
@@ -81,7 +82,7 @@ class PostgresIdempotencyIntegrationTest {
     void initSubjects() {
         JdbcClient.create(dataSource).sql("DELETE FROM idempotency_records").update();
         store = new JdbcPersistenceStore(dataSource, "idempotency_records", clock);
-        service = DefaultIdempotencyService.builder(store)
+        service = new DefaultIdempotencyServiceBuilder(store)
                 .clock(clock)
                 .persistenceTtl(Duration.ofHours(24))
                 .build();

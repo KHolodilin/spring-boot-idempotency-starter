@@ -1,7 +1,7 @@
 package com.kholodilin.idempotency.autoconfigure;
 
 import com.kholodilin.idempotency.IdempotencyService;
-import com.kholodilin.idempotency.core.DefaultIdempotencyService;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
 import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
 import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.spi.DistributedCache;
@@ -57,7 +57,7 @@ public class IdempotencyAutoConfiguration {
             ObjectProvider<LocalCache> localCache,
             ObjectProvider<DistributedCache> distributedCache,
             ObjectProvider<IdempotencyMetrics> metrics) {
-        return DefaultIdempotencyService.builder(persistenceStore)
+        return new DefaultIdempotencyServiceBuilder(persistenceStore)
                 .fingerprintStrategy(fingerprintStrategy)
                 .serializer(serializer)
                 .localCache(localCache.getIfAvailable())

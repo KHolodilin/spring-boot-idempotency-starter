@@ -63,8 +63,8 @@ class DefaultIdempotencyServiceTest {
         TransactionSynchronizationManager.setActualTransactionActive(false);
     }
 
-    private DefaultIdempotencyService.Builder serviceBuilder() {
-        return DefaultIdempotencyService.builder(store).clock(clock).requireActiveTransaction(false);
+    private DefaultIdempotencyServiceBuilder serviceBuilder() {
+        return new DefaultIdempotencyServiceBuilder(store).clock(clock).requireActiveTransaction(false);
     }
 
     private ExecutionResult<PaymentResult> countingAction() {
@@ -187,7 +187,7 @@ class DefaultIdempotencyServiceTest {
     @Test
     void missingTransactionIsRejectedWhenRequired() {
         DefaultIdempotencyService service =
-                DefaultIdempotencyService.builder(store).clock(clock).build();
+                new DefaultIdempotencyServiceBuilder(store).clock(clock).build();
 
         assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
                 .isInstanceOf(MissingTransactionException.class);
@@ -348,7 +348,7 @@ class DefaultIdempotencyServiceTest {
                 .thenReturn(Optional.of(committedByOther)); // after lost acquire
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
-        DefaultIdempotencyService service = DefaultIdempotencyService.builder(racingStore)
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -368,7 +368,7 @@ class DefaultIdempotencyServiceTest {
                 .thenReturn(false) // lost the race
                 .thenReturn(true); // concurrent transaction rolled back, second attempt wins
 
-        DefaultIdempotencyService service = DefaultIdempotencyService.builder(racingStore)
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
