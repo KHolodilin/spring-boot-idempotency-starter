@@ -8,9 +8,8 @@ import java.util.function.Supplier;
 import com.kholodilin.idempotency.IdempotencyKey;
 import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.DistributedCache;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.json.JsonMapper;
@@ -23,12 +22,11 @@ import tools.jackson.databind.json.JsonMapper;
  * Redis failure is logged and treated as a cache miss — persistence remains the source
  * of truth and the business operation is never affected.
  */
+@Slf4j
 public final class RedisDistributedCache implements DistributedCache {
 
     public static final String DEFAULT_KEY_PREFIX = "idempotency:";
     public static final Duration DEFAULT_TTL = Duration.ofHours(1);
-
-    private static final Logger log = LoggerFactory.getLogger(RedisDistributedCache.class);
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
