@@ -49,8 +49,13 @@ jobs:
         run: mvn -B -ntp clean verify
 
       - name: Publish to GitHub Packages
-        # github-packages profile sets distributionManagement; release profile is NOT
-        # activated so central-publishing-maven-plugin does not intercept deploy.
-        run: mvn -B -ntp deploy -P github-packages -Dmaven.test.skip=true -Djacoco.skip=true
+        # github-packages: distributionManagement + disables redis test-jar profile.
+        # Do not activate -P release here — that enables central-publishing-maven-plugin.
+        run: >
+          mvn -B -ntp deploy
+          -P github-packages
+          -Dmaven.test.skip=true
+          -Djacoco.skip=true
+          -Dspotless.check.skip=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
