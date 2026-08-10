@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter/branch/main/graph/badge.svg)](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter)
+[![Maven Central](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter.svg?label=maven-central)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -65,32 +66,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.2.0-SNAPSHOT")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.2.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.2.0-SNAPSHOT")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.2.0-SNAPSHOT")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.2.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.2.0")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
