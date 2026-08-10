@@ -1,7 +1,6 @@
 package com.kholodilin.idempotency.jackson;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,27 +16,26 @@ class JacksonIdempotencySerializerTest {
     void roundTripsPojo() {
         PaymentResult original = new PaymentResult("pay-42", new BigDecimal("99.90"));
 
-        byte[] bytes = serializer.serialize(original);
-        PaymentResult restored = serializer.deserialize(bytes, PaymentResult.class);
+        String json = serializer.serialize(original);
+        PaymentResult restored = serializer.deserialize(json, PaymentResult.class);
 
         assertThat(restored).isEqualTo(original);
     }
 
     @Test
     void serializesNullAsJsonNull() {
-        assertThat(new String(serializer.serialize(null), StandardCharsets.UTF_8))
-                .isEqualTo("null");
+        assertThat(serializer.serialize(null)).isEqualTo("null");
     }
 
     @Test
     void deserializesJsonNullToNull() {
-        assertThat(serializer.deserialize("null".getBytes(StandardCharsets.UTF_8), PaymentResult.class))
-                .isNull();
+        assertThat(serializer.deserialize("null", PaymentResult.class)).isNull();
     }
 
     @Test
     void voidTypeAlwaysDeserializesToNull() {
-        assertThat(serializer.deserialize("{}".getBytes(StandardCharsets.UTF_8), Void.class))
-                .isNull();
+        assertThat(serializer.deserialize("{}", Void.class)).isNull();
+        assertThat(serializer.deserialize("{}", void.class)).isNull();
+        assertThat(serializer.deserialize(null, PaymentResult.class)).isNull();
     }
 }

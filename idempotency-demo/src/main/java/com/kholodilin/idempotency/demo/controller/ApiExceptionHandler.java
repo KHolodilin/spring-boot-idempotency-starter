@@ -2,8 +2,8 @@ package com.kholodilin.idempotency.demo.controller;
 
 import java.util.Map;
 
-import com.kholodilin.idempotency.IdempotencyConflictException;
-import com.kholodilin.idempotency.IdempotencyRejectedException;
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;

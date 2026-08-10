@@ -1,4 +1,4 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.model;
 
 /**
  * Persistent status of an idempotency record.

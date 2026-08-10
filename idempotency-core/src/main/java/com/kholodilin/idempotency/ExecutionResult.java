@@ -3,6 +3,7 @@ package com.kholodilin.idempotency;
 import java.util.Objects;
 import java.util.function.Function;
 
+import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
 import com.kholodilin.idempotency.jackson.Json;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;

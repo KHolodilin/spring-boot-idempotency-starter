@@ -5,19 +5,21 @@ import java.time.Instant;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.jdbc.JdbcPersistenceStore;
 import com.kholodilin.idempotency.jdbc.SchemaMode;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.redis.RedisDistributedCache;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.FingerprintStrategy;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
+import com.kholodilin.idempotency.spi.IdempotencyPersistenceCleanup;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -38,6 +41,7 @@ class IdempotencyAutoConfigurationTest {
                     IdempotencyCaffeineAutoConfiguration.class,
                     IdempotencyRedisAutoConfiguration.class,
                     IdempotencyMetricsAutoConfiguration.class,
+                    IdempotencyCleanupAutoConfiguration.class,
                     IdempotencyAutoConfiguration.class));
 
     private ApplicationContextRunner withDataSource() {
@@ -60,6 +64,7 @@ class IdempotencyAutoConfigurationTest {
             assertThat(context).hasSingleBean(FingerprintStrategy.class);
             assertThat(context).hasSingleBean(IdempotencySerializer.class);
             assertThat(context.getBean(PersistenceStore.class)).isInstanceOf(JdbcPersistenceStore.class);
+            assertThat(context.getBean(TransactionContext.class)).isInstanceOf(SpringTransactionContext.class);
         });
     }
 
@@ -165,7 +170,11 @@ class IdempotencyAutoConfigurationTest {
                         "idempotency.distributed-cache.key-prefix=custom:",
                         "idempotency.distributed-cache.failure-policy=fail-fast",
                         "idempotency.persistence.table-name=custom_records",
-                        "idempotency.persistence.ttl=48h")
+                        "idempotency.persistence.ttl=30d",
+                        "idempotency.persistence.lookup-before-acquire=true",
+                        "idempotency.persistence.cleanup.enabled=true",
+                        "idempotency.persistence.cleanup.cron=0 15 4 * * *",
+                        "idempotency.persistence.cleanup.batch-size=250")
                 .run(context -> {
                     IdempotencyProperties properties = context.getBean(IdempotencyProperties.class);
                     assertThat(properties.getFingerprint().getAlgorithm()).isEqualTo("SHA-512");
@@ -176,9 +185,42 @@ class IdempotencyAutoConfigurationTest {
                     assertThat(properties.getDistributedCache().getFailurePolicy())
                             .isEqualTo("fail-fast");
                     assertThat(properties.getPersistence().getTableName()).isEqualTo("custom_records");
-                    assertThat(properties.getPersistence().getTtl()).isEqualTo(Duration.ofHours(48));
+                    assertThat(properties.getPersistence().getTtl()).isEqualTo(Duration.ofDays(30));
+                    assertThat(properties.getPersistence().isLookupBeforeAcquire())
+                            .isTrue();
+                    assertThat(properties.getPersistence().getCleanup().isEnabled())
+                            .isTrue();
+                    assertThat(properties.getPersistence().getCleanup().getCron())
+                            .isEqualTo("0 15 4 * * *");
+                    assertThat(properties.getPersistence().getCleanup().getBatchSize())
+                            .isEqualTo(250);
                     assertThat(properties.getPersistence().getSchema().getMode())
                             .isEqualTo(SchemaMode.NONE);
+                });
+    }
+
+    @Test
+    void cleanupIsDisabledByDefault() {
+        withDataSource()
+                .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(IdempotencyPersistenceCleanup.class);
+                    assertThat(context).doesNotHaveBean(IdempotencyPersistenceCleanupJob.class);
+                    assertThat(context.getBean(IdempotencyProperties.class)
+                                    .getPersistence()
+                                    .getTtl())
+                            .isEqualTo(Duration.ofDays(365));
+                });
+    }
+
+    @Test
+    void cleanupJobIsCreatedWhenEnabled() {
+        withDataSource()
+                .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
+                .withPropertyValues("idempotency.persistence.cleanup.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(IdempotencyPersistenceCleanup.class);
+                    assertThat(context).hasSingleBean(IdempotencyPersistenceCleanupJob.class);
                 });
     }
 

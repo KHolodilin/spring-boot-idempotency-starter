@@ -5,27 +5,26 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
-import com.kholodilin.idempotency.IdempotencyConflictException;
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
-import com.kholodilin.idempotency.MissingTransactionException;
-import com.kholodilin.idempotency.spi.DistributedCache;
-import com.kholodilin.idempotency.spi.LocalCache;
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.exception.MissingTransactionException;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.PersistenceStore;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import com.kholodilin.idempotency.spi.TransactionContext;
+import com.kholodilin.idempotency.testsupport.InMemoryCache;
+import com.kholodilin.idempotency.testsupport.InMemoryPersistenceCleanup;
+import com.kholodilin.idempotency.testsupport.InMemoryStore;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,17 +53,8 @@ class DefaultIdempotencyServiceTest {
     private final Command command = new Command("o-1", new BigDecimal("10.00"));
     private final AtomicInteger actionCalls = new AtomicInteger();
 
-    @BeforeEach
-    @AfterEach
-    void cleanTransactionState() {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-        TransactionSynchronizationManager.setActualTransactionActive(false);
-    }
-
-    private DefaultIdempotencyService.Builder serviceBuilder() {
-        return DefaultIdempotencyService.builder(store).clock(clock).requireActiveTransaction(false);
+    private DefaultIdempotencyServiceBuilder serviceBuilder() {
+        return new DefaultIdempotencyServiceBuilder(store).clock(clock).requireActiveTransaction(false);
     }
 
     private ExecutionResult<PaymentResult> countingAction() {
@@ -186,8 +176,21 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void missingTransactionIsRejectedWhenRequired() {
-        DefaultIdempotencyService service =
-                DefaultIdempotencyService.builder(store).clock(clock).build();
+        TransactionContext inactive = new TransactionContext() {
+            @Override
+            public boolean isActive() {
+                return false;
+            }
+
+            @Override
+            public void afterCommit(Runnable action) {
+                action.run();
+            }
+        };
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .clock(clock)
+                .transactionContext(inactive)
+                .build();
 
         assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
                 .isInstanceOf(MissingTransactionException.class);
@@ -237,7 +240,7 @@ class DefaultIdempotencyServiceTest {
     }
 
     @Test
-    void persistenceHitIsPromotedToBothCaches() {
+    void persistenceHitAfterAcquireConflictIsPromotedToBothCaches() {
         DefaultIdempotencyService service =
                 serviceBuilder().localCache(local).distributedCache(distributed).build();
         IdempotencyRecord record = completedRecord();
@@ -246,8 +249,36 @@ class DefaultIdempotencyServiceTest {
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
+        assertThat(store.acquireCalls).hasValue(1);
+        assertThat(store.findCalls).hasValue(1);
         assertThat(local.data).containsEntry(record.key(), record);
         assertThat(distributed.data).containsEntry(record.key(), record);
+    }
+
+    @Test
+    void insertFirstSkipsPersistenceFindOnCacheMiss() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(store.acquireCalls).hasValue(1);
+        assertThat(store.findCalls)
+                .as("default insert-first must not find before acquire")
+                .hasValue(0);
+    }
+
+    @Test
+    void lookupBeforeAcquireReplaysTerminalWithoutAcquire() {
+        IdempotencyRecord record = completedRecord();
+        store.data.put(record.key(), record);
+        DefaultIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(store.findCalls).hasValue(1);
+        assertThat(store.acquireCalls).hasValue(0);
     }
 
     @Test
@@ -261,26 +292,54 @@ class DefaultIdempotencyServiceTest {
     }
 
     @Test
-    void expiredCacheEntryIsEvictedAndOperationExecutesAgain() {
+    void expiredTerminalCacheEntryIsStillReplayed() {
         DefaultIdempotencyService service = serviceBuilder().localCache(local).build();
-        IdempotencyRecord expired = completedRecord()
-                .completed(PaymentResult.class.getName(), "{\"paymentId\":\"old\"}", NOW.minusSeconds(7200));
-        expired = new IdempotencyRecord(
-                expired.key(),
-                expired.status(),
-                expired.requestHash(),
-                expired.resultType(),
-                expired.resultPayload(),
+        IdempotencyRecord base = completedRecord();
+        IdempotencyRecord expired = new IdempotencyRecord(
+                base.key(),
+                IdempotencyStatus.COMPLETED,
+                base.requestHash(),
+                PaymentResult.class.getName(),
+                "{\"paymentId\":\"pay-42\"}",
                 null,
                 NOW.minusSeconds(7200),
                 NOW.minusSeconds(7200),
                 NOW.minusSeconds(3600));
         local.data.put(expired.key(), expired);
 
+        ExecutionResult<PaymentResult> result =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(local.evicts).hasValue(0);
+        assertThat(store.acquireCalls).hasValue(0);
+    }
+
+    @Test
+    void physicalCleanupAllowsNewAcquire() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(1)).build();
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        assertThat(actionCalls).hasValue(1);
+
+        new InMemoryPersistenceCleanup(store).deleteExpired(NOW.plus(Duration.ofHours(2)), 100);
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        assertThat(actionCalls).hasValue(2);
+    }
+
+    @Test
+    void acquireConflictAndWaitAreRecorded() {
+        IdempotencyMetrics metrics = mock(IdempotencyMetrics.class);
+        IdempotencyRecord record = completedRecord();
+        store.data.put(record.key(), record);
+        DefaultIdempotencyService service = serviceBuilder().metrics(metrics).build();
+
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
-        assertThat(actionCalls).hasValue(1);
-        assertThat(local.evicts).hasValue(1);
+        verify(metrics).acquireConflict();
+        verify(metrics).acquireWait(any(Duration.class));
     }
 
     @Test
@@ -311,30 +370,35 @@ class DefaultIdempotencyServiceTest {
 
     @Test
     void cachePopulationIsDeferredUntilAfterCommit() {
-        DefaultIdempotencyService service =
-                serviceBuilder().localCache(local).distributedCache(distributed).build();
-
-        TransactionSynchronizationManager.initSynchronization();
-        TransactionSynchronizationManager.setActualTransactionActive(true);
-        try {
-            service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
-
-            assertThat(local.data)
-                    .as("cache must not contain uncommitted state")
-                    .isEmpty();
-            assertThat(distributed.data).isEmpty();
-
-            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
-                synchronization.afterCommit();
+        List<Runnable> deferred = new ArrayList<>();
+        TransactionContext capturing = new TransactionContext() {
+            @Override
+            public boolean isActive() {
+                return true;
             }
 
-            IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
-            assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
-            assertThat(distributed.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-            TransactionSynchronizationManager.setActualTransactionActive(false);
-        }
+            @Override
+            public void afterCommit(Runnable action) {
+                deferred.add(action);
+            }
+        };
+        DefaultIdempotencyService service = serviceBuilder()
+                .localCache(local)
+                .distributedCache(distributed)
+                .transactionContext(capturing)
+                .build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(local.data).as("cache must not contain uncommitted state").isEmpty();
+        assertThat(distributed.data).isEmpty();
+        assertThat(deferred).hasSize(1);
+
+        deferred.forEach(Runnable::run);
+
+        IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
+        assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
+        assertThat(distributed.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
     }
 
     // ---------------------------------------------------------------- concurrency edges
@@ -343,12 +407,10 @@ class DefaultIdempotencyServiceTest {
     void lostAcquireRaceReplaysRecordCommittedByConcurrentRequest() {
         PersistenceStore racingStore = mock(PersistenceStore.class);
         IdempotencyRecord committedByOther = completedRecord();
-        when(racingStore.find(any()))
-                .thenReturn(Optional.empty()) // initial lookup
-                .thenReturn(Optional.of(committedByOther)); // after lost acquire
+        when(racingStore.find(any())).thenReturn(Optional.of(committedByOther));
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
-        DefaultIdempotencyService service = DefaultIdempotencyService.builder(racingStore)
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -358,6 +420,7 @@ class DefaultIdempotencyServiceTest {
 
         assertThat(actionCalls).hasValue(0);
         assertThat(((Success<PaymentResult>) result).value()).isEqualTo(new PaymentResult("pay-42"));
+        verify(racingStore, times(1)).find(any());
     }
 
     @Test
@@ -368,7 +431,7 @@ class DefaultIdempotencyServiceTest {
                 .thenReturn(false) // lost the race
                 .thenReturn(true); // concurrent transaction rolled back, second attempt wins
 
-        DefaultIdempotencyService service = DefaultIdempotencyService.builder(racingStore)
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -381,6 +444,165 @@ class DefaultIdempotencyServiceTest {
         verify(racingStore, times(2)).acquire(any(), any(), any(), any());
     }
 
+    @Test
+    void acquireLoopExhaustionThrowsIllegalStateException() {
+        PersistenceStore racingStore = mock(PersistenceStore.class);
+        when(racingStore.find(any())).thenReturn(Optional.empty());
+        when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
+
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
+                .clock(clock)
+                .requireActiveTransaction(false)
+                .build();
+
+        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("after 3 attempts");
+        assertThat(actionCalls).hasValue(0);
+        verify(racingStore, times(3)).acquire(any(), any(), any(), any());
+    }
+
+    @Test
+    void nonTerminalCacheEntryIsEvictedAndAcquisitionContinues() {
+        DefaultIdempotencyService service = serviceBuilder().localCache(local).build();
+        IdempotencyRecord processing = IdempotencyRecord.processing(
+                new IdempotencyKey(OPERATION, KEY), completedRecord().requestHash(), NOW.minusSeconds(1), null);
+        local.data.put(processing.key(), processing);
+
+        ExecutionResult<PaymentResult> result =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(1);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(local.evicts).hasValue(1);
+    }
+
+    @Test
+    void lookupBeforeAcquireSkipsNonTerminalPersistenceRow() {
+        IdempotencyRecord processing = IdempotencyRecord.processing(
+                new IdempotencyKey(OPERATION, KEY), completedRecord().requestHash(), NOW.minusSeconds(1), null);
+        store.data.put(processing.key(), processing);
+        DefaultIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        // acquire fails (row present), find returns non-terminal → loop exhausts
+        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("after 3 attempts");
+        assertThat(actionCalls).hasValue(0);
+        assertThat(store.findCalls.get()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void builderAcceptsCustomFingerprintAndSerializer() {
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .fingerprintStrategy(request -> "fixed-hash")
+                .serializer(new com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer())
+                .clock(clock)
+                .requireActiveTransaction(false)
+                .build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).requestHash())
+                .isEqualTo("fixed-hash");
+    }
+
+    @Test
+    void immediateTransactionContextReportsActiveAndRunsAfterCommit() {
+        var ran = new java.util.concurrent.atomic.AtomicBoolean();
+        assertThat(com.kholodilin.idempotency.spi.TransactionContext.IMMEDIATE.isActive())
+                .isTrue();
+        com.kholodilin.idempotency.spi.TransactionContext.IMMEDIATE.afterCommit(() -> ran.set(true));
+        assertThat(ran).isTrue();
+    }
+
+    @Test
+    void activeImmediateTransactionSatisfiesRequireActiveTransaction() {
+        DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .clock(clock)
+                .transactionContext(TransactionContext.IMMEDIATE)
+                .requireActiveTransaction(true)
+                .build();
+
+        ExecutionResult<PaymentResult> result =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(actionCalls).hasValue(1);
+    }
+
+    @Test
+    void rejectedWithoutDetailsPersistsNullPayload() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        ExecutionResult<PaymentResult> first =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, () -> ExecutionResult.rejected("GONE"));
+
+        assertThat(first).isInstanceOf(Rejected.class);
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).resultPayload())
+                .isNull();
+    }
+
+    @Test
+    void distributedOnlyCacheHitReplaysWithoutLocalPromotion() {
+        DefaultIdempotencyService service =
+                serviceBuilder().distributedCache(distributed).build();
+        IdempotencyRecord record = completedRecord();
+        distributed.data.put(record.key(), record);
+
+        ExecutionResult<PaymentResult> result =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(store.acquireCalls).hasValue(0);
+        assertThat(local.data).isEmpty();
+    }
+
+    @Test
+    void lookupBeforeAcquireWithEmptyStoreProceedsToAcquire() {
+        DefaultIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(1);
+        assertThat(store.findCalls).hasValue(1);
+        assertThat(store.acquireCalls).hasValue(1);
+    }
+
+    @Test
+    void onlyDistributedCacheIsPopulatedAfterCommit() {
+        DefaultIdempotencyService service =
+                serviceBuilder().distributedCache(distributed).build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(distributed.data).containsKey(new IdempotencyKey(OPERATION, KEY));
+        assertThat(local.data).isEmpty();
+    }
+
+    @Test
+    void replayThrowsOnUnexpectedProcessingRecord() throws Exception {
+        DefaultIdempotencyService service = serviceBuilder().build();
+        IdempotencyRecord processing =
+                IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), "hash", NOW, null);
+        var replay = DefaultIdempotencyService.class.getDeclaredMethod(
+                "replay", IdempotencyRecord.class, String.class, Class.class);
+        replay.setAccessible(true);
+
+        assertThatThrownBy(() -> {
+                    try {
+                        replay.invoke(service, processing, "hash", PaymentResult.class);
+                    } catch (java.lang.reflect.InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                })
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unexpected committed PROCESSING");
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private IdempotencyRecord completedRecord() {
@@ -390,70 +612,5 @@ class DefaultIdempotencyServiceTest {
                 new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy().calculate(command);
         return IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), fingerprint, NOW.minusSeconds(60), null)
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"pay-42\"}", NOW.minusSeconds(60));
-    }
-
-    static final class InMemoryStore implements PersistenceStore {
-
-        final Map<IdempotencyKey, IdempotencyRecord> data = new HashMap<>();
-        final AtomicInteger findCalls = new AtomicInteger();
-        final AtomicInteger acquireCalls = new AtomicInteger();
-        private final Clock clock;
-
-        InMemoryStore(Clock clock) {
-            this.clock = clock;
-        }
-
-        @Override
-        public Optional<IdempotencyRecord> find(IdempotencyKey key) {
-            findCalls.incrementAndGet();
-            return Optional.ofNullable(data.get(key)).filter(r -> !r.isExpired(clock.instant()));
-        }
-
-        @Override
-        public boolean acquire(IdempotencyKey key, String requestHash, Instant createdAt, Instant expiresAt) {
-            acquireCalls.incrementAndGet();
-            IdempotencyRecord existing = data.get(key);
-            if (existing != null && !existing.isExpired(clock.instant())) {
-                return false;
-            }
-            data.put(key, IdempotencyRecord.processing(key, requestHash, createdAt, expiresAt));
-            return true;
-        }
-
-        @Override
-        public void complete(IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.completed(resultType, resultPayload, completedAt));
-        }
-
-        @Override
-        public void reject(IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.rejected(errorCode, detailsPayload, completedAt));
-        }
-    }
-
-    static final class InMemoryCache implements LocalCache, DistributedCache {
-
-        final Map<IdempotencyKey, IdempotencyRecord> data = new HashMap<>();
-        final AtomicInteger gets = new AtomicInteger();
-        final AtomicInteger puts = new AtomicInteger();
-        final AtomicInteger evicts = new AtomicInteger();
-
-        @Override
-        public Optional<IdempotencyRecord> get(IdempotencyKey key) {
-            gets.incrementAndGet();
-            return Optional.ofNullable(data.get(key));
-        }
-
-        @Override
-        public void put(IdempotencyKey key, IdempotencyRecord record) {
-            puts.incrementAndGet();
-            data.put(key, record);
-        }
-
-        @Override
-        public void evict(IdempotencyKey key) {
-            evicts.incrementAndGet();
-            data.remove(key);
-        }
     }
 }

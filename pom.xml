@@ -7,7 +7,7 @@
 
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Spring Boot Idempotency Starter</name>
@@ -63,11 +63,13 @@
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <spotless-maven-plugin.version>3.9.0</spotless-maven-plugin.version>
         <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>
@@ -95,6 +97,12 @@
             </dependency>
             <dependency>
                 <groupId>com.kholodilin</groupId>
+                <artifactId>idempotency-core</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
                 <artifactId>idempotency-persistence-jdbc</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -113,12 +121,22 @@
                 <artifactId>spring-boot-idempotency-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven-jar-plugin.version}</version>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -129,6 +147,13 @@
                         <compilerArgs>
                             <arg>-Xlint:all,-serial,-processing</arg>
                         </compilerArgs>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -279,6 +304,13 @@
         <!-- Activated by the release workflow: sources + GPG signatures required by Maven Central -->
         <profile>
             <id>release</id>
+            <properties>
+                <!--
+                  Skip tests on publish. Combined with module release profiles that drop the
+                  reactor-only test-jar, so `mvn deploy -P release` never ships *-tests.jar.
+                -->
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
             <build>
                 <plugins>
                     <plugin>

@@ -37,7 +37,7 @@ public class IdempotencyRedisAutoConfiguration {
     @ConditionalOnProperty(name = "idempotency.distributed-cache.enabled", matchIfMissing = true)
     public RedisDistributedCache redisIdempotencyDistributedCache(
             RedisConnectionFactory connectionFactory, IdempotencyProperties properties) {
-        IdempotencyProperties.DistributedCache config = properties.getDistributedCache();
+        IdempotencyProperties.DistributedCacheSettings config = properties.getDistributedCache();
         RedisCacheFailurePolicy policy = RedisCacheFailurePolicy.valueOf(
                 config.getFailurePolicy().toUpperCase(Locale.ROOT).replace('-', '_'));
         return new RedisDistributedCache(connectionFactory, config.getKeyPrefix(), config.getTtl(), policy);

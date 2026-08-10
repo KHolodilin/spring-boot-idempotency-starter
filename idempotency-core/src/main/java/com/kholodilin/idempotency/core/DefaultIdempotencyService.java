@@ -1,41 +1,39 @@
 package com.kholodilin.idempotency.core;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
-import com.kholodilin.idempotency.IdempotencyConflictException;
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
 import com.kholodilin.idempotency.IdempotencyService;
-import com.kholodilin.idempotency.MissingTransactionException;
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.exception.MissingTransactionException;
 import com.kholodilin.idempotency.jackson.Json;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.FingerprintStrategy;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import org.jspecify.annotations.Nullable;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Default {@link IdempotencyService} implementation.
  *
- * <p>Lookup order: local cache (if configured) → distributed cache (if configured) →
- * persistence (source of truth). Freshly persisted outcomes are pushed to the cache
- * layers only after the surrounding transaction commits, so caches never contain
- * uncommitted state.
+ * <p>Lookup order: local cache (if configured) → distributed cache (if configured).
+ * On a cache miss the service either optionally checks persistence or goes straight to
+ * {@code INSERT ... ON CONFLICT DO NOTHING}. Fresh outcomes are pushed to the cache
+ * layers only after the surrounding transaction commits.
  */
 public final class DefaultIdempotencyService implements IdempotencyService {
 
@@ -54,8 +52,10 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     private final Clock clock;
     private final @Nullable Duration persistenceTtl;
     private final boolean requireActiveTransaction;
+    private final boolean lookupBeforeAcquire;
+    private final TransactionContext transactionContext;
 
-    private DefaultIdempotencyService(Builder builder) {
+    DefaultIdempotencyService(DefaultIdempotencyServiceBuilder builder) {
         this.persistenceStore = builder.persistenceStore;
         this.fingerprintStrategy = builder.fingerprintStrategy;
         this.serializer = builder.serializer;
@@ -65,10 +65,8 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         this.clock = builder.clock;
         this.persistenceTtl = builder.persistenceTtl;
         this.requireActiveTransaction = builder.requireActiveTransaction;
-    }
-
-    public static Builder builder(PersistenceStore persistenceStore) {
-        return new Builder(persistenceStore);
+        this.lookupBeforeAcquire = builder.lookupBeforeAcquire;
+        this.transactionContext = builder.transactionContext;
     }
 
     @Override
@@ -82,28 +80,42 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         Objects.requireNonNull(action, "action");
         IdempotencyKey key = new IdempotencyKey(operation, idempotencyKey);
 
-        if (requireActiveTransaction && !TransactionSynchronizationManager.isActualTransactionActive()) {
+        if (requireActiveTransaction && !transactionContext.isActive()) {
             throw new MissingTransactionException(key);
         }
 
         String fingerprint = fingerprintStrategy.calculate(request);
 
-        IdempotencyRecord existing = lookup(key);
-        if (existing != null) {
-            return replay(existing, fingerprint, resultType);
+        IdempotencyRecord cached = lookupCaches(key);
+        if (cached != null) {
+            return replay(cached, fingerprint, resultType);
+        }
+
+        if (lookupBeforeAcquire) {
+            IdempotencyRecord existing = persistenceStore.find(key).orElse(null);
+            if (existing != null && isUsable(existing)) {
+                metrics.lookupHit(LEVEL_PERSISTENCE);
+                promote(existing);
+                return replay(existing, fingerprint, resultType);
+            }
         }
 
         for (int attempt = 0; attempt < MAX_ACQUIRE_ATTEMPTS; attempt++) {
             Instant createdAt = clock.instant();
             Instant expiresAt = persistenceTtl == null ? null : createdAt.plus(persistenceTtl);
 
-            // With the JDBC/PostgreSQL store a concurrent duplicate blocks here on the
-            // primary-key index until the first transaction commits or rolls back.
-            if (persistenceStore.acquire(key, fingerprint, createdAt, expiresAt)) {
+            // Concurrent duplicate blocks here on the primary-key index until the first
+            // transaction commits or rolls back.
+            Instant acquireStarted = clock.instant();
+            boolean acquired = persistenceStore.acquire(key, fingerprint, createdAt, expiresAt);
+            metrics.acquireWait(Duration.between(acquireStarted, clock.instant()));
+
+            if (acquired) {
                 metrics.acquired();
                 return runAction(key, fingerprint, createdAt, expiresAt, resultType, action);
             }
 
+            metrics.acquireConflict();
             Optional<IdempotencyRecord> found = persistenceStore.find(key);
             if (found.isPresent() && isUsable(found.get())) {
                 IdempotencyRecord record = found.get();
@@ -111,7 +123,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                 promote(record);
                 return replay(record, fingerprint, resultType);
             }
-            // The concurrent holder rolled back or the record expired — try to acquire again.
+            // The concurrent holder rolled back — try to acquire again.
         }
         throw new IllegalStateException(
                 "Could not acquire idempotency record for %s after %d attempts".formatted(key, MAX_ACQUIRE_ATTEMPTS));
@@ -137,9 +149,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         ExecutionResult<RS> outcome;
         switch (result) {
             case Success<RS> success -> {
-                String payload = success.value() == null
-                        ? null
-                        : new String(serializer.serialize(success.value()), StandardCharsets.UTF_8);
+                String payload = success.value() == null ? null : serializer.serialize(success.value());
                 persistenceStore.complete(key, resultType.getName(), payload, completedAt);
                 terminal = processing.completed(resultType.getName(), payload, completedAt);
                 outcome = success;
@@ -161,36 +171,39 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         return outcome;
     }
 
-    private @Nullable IdempotencyRecord lookup(IdempotencyKey key) {
+    private @Nullable IdempotencyRecord lookupCaches(IdempotencyKey key) {
         if (localCache != null) {
-            IdempotencyRecord record = localCache.get(key).orElse(null);
-            if (record != null) {
-                if (isUsable(record)) {
-                    metrics.lookupHit(LEVEL_LOCAL);
-                    return record;
-                }
-                localCache.evict(key);
+            IdempotencyRecord hit = readCache(key, localCache::get, localCache::evict, LEVEL_LOCAL);
+            if (hit != null) {
+                return hit;
             }
         }
         if (distributedCache != null) {
-            IdempotencyRecord record = distributedCache.get(key).orElse(null);
-            if (record != null) {
-                if (isUsable(record)) {
-                    metrics.lookupHit(LEVEL_DISTRIBUTED);
-                    if (localCache != null) {
-                        localCache.put(key, record);
-                    }
-                    return record;
+            IdempotencyRecord hit = readCache(key, distributedCache::get, distributedCache::evict, LEVEL_DISTRIBUTED);
+            if (hit != null) {
+                if (localCache != null) {
+                    localCache.put(key, hit);
                 }
-                distributedCache.evict(key);
+                return hit;
             }
         }
-        IdempotencyRecord record = persistenceStore.find(key).orElse(null);
-        if (record != null && isUsable(record)) {
-            metrics.lookupHit(LEVEL_PERSISTENCE);
-            promote(record);
+        return null;
+    }
+
+    private @Nullable IdempotencyRecord readCache(
+            IdempotencyKey key,
+            Function<IdempotencyKey, Optional<IdempotencyRecord>> get,
+            Consumer<IdempotencyKey> evict,
+            String level) {
+        IdempotencyRecord record = get.apply(key).orElse(null);
+        if (record == null) {
+            return null;
+        }
+        if (isUsable(record)) {
+            metrics.lookupHit(level);
             return record;
         }
+        evict.accept(key);
         return null;
     }
 
@@ -201,12 +214,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         }
         metrics.replayed(record.status());
         return switch (record.status()) {
-            case COMPLETED -> {
-                RS value = record.resultPayload() == null
-                        ? null
-                        : serializer.deserialize(record.resultPayload().getBytes(StandardCharsets.UTF_8), resultType);
-                yield ExecutionResult.success(value);
-            }
+            case COMPLETED -> ExecutionResult.success(serializer.deserialize(record.resultPayload(), resultType));
             case REJECTED ->
                 new Rejected<>(
                         Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),
@@ -218,7 +226,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     }
 
     private boolean isUsable(IdempotencyRecord record) {
-        return record.status().isTerminal() && !record.isExpired(clock.instant());
+        return record.status().isTerminal();
     }
 
     /**
@@ -241,83 +249,6 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         if (localCache == null && distributedCache == null) {
             return;
         }
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    promote(record);
-                }
-            });
-        } else {
-            promote(record);
-        }
-    }
-
-    public static final class Builder {
-
-        private final PersistenceStore persistenceStore;
-        private FingerprintStrategy fingerprintStrategy = new CanonicalJsonFingerprintStrategy();
-        private IdempotencySerializer serializer = new JacksonIdempotencySerializer();
-        private @Nullable LocalCache localCache;
-        private @Nullable DistributedCache distributedCache;
-        private IdempotencyMetrics metrics = IdempotencyMetrics.NOOP;
-        private Clock clock = Clock.systemUTC();
-        private @Nullable Duration persistenceTtl;
-        private boolean requireActiveTransaction = true;
-
-        private Builder(PersistenceStore persistenceStore) {
-            this.persistenceStore = Objects.requireNonNull(persistenceStore, "persistenceStore");
-        }
-
-        public Builder fingerprintStrategy(FingerprintStrategy fingerprintStrategy) {
-            this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy);
-            return this;
-        }
-
-        public Builder serializer(IdempotencySerializer serializer) {
-            this.serializer = Objects.requireNonNull(serializer);
-            return this;
-        }
-
-        public Builder localCache(@Nullable LocalCache localCache) {
-            this.localCache = localCache;
-            return this;
-        }
-
-        public Builder distributedCache(@Nullable DistributedCache distributedCache) {
-            this.distributedCache = distributedCache;
-            return this;
-        }
-
-        public Builder metrics(IdempotencyMetrics metrics) {
-            this.metrics = Objects.requireNonNull(metrics);
-            return this;
-        }
-
-        public Builder clock(Clock clock) {
-            this.clock = Objects.requireNonNull(clock);
-            return this;
-        }
-
-        /**
-         * How long a stored outcome stays replayable. {@code null} means no expiration.
-         */
-        public Builder persistenceTtl(@Nullable Duration persistenceTtl) {
-            this.persistenceTtl = persistenceTtl;
-            return this;
-        }
-
-        /**
-         * Disable only in tests: without a surrounding transaction atomicity of business
-         * state and idempotency state is not guaranteed.
-         */
-        public Builder requireActiveTransaction(boolean requireActiveTransaction) {
-            this.requireActiveTransaction = requireActiveTransaction;
-            return this;
-        }
-
-        public DefaultIdempotencyService build() {
-            return new DefaultIdempotencyService(this);
-        }
+        transactionContext.afterCommit(() -> promote(record));
     }
 }

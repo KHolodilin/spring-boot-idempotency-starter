@@ -1,6 +1,8 @@
 package com.kholodilin.idempotency.spi;
 
-import com.kholodilin.idempotency.IdempotencyStatus;
+import java.time.Duration;
+
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 
 /**
  * Observability hook. A no-op implementation is used unless something better
@@ -31,6 +33,17 @@ public interface IdempotencyMetrics {
      * A new record was acquired and the business action is about to run.
      */
     default void acquired() {}
+
+    /**
+     * {@code acquire} returned {@code false} (primary key already held).
+     */
+    default void acquireConflict() {}
+
+    /**
+     * Wall time spent in {@code PersistenceStore#acquire}, including any wait on the
+     * unique index.
+     */
+    default void acquireWait(Duration wait) {}
 
     /**
      * A fresh outcome was persisted.

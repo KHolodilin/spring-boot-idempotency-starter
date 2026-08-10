@@ -1,0 +1,55 @@
+{
+  "properties": [
+    {
+      "name": "idempotency.distributed-cache.failure-policy",
+      "type": "java.lang.String",
+      "defaultValue": "fail-open",
+      "description": "Behaviour when Redis is unavailable: fail-open treats Redis errors as cache misses; fail-fast propagates them to the caller."
+    },
+    {
+      "name": "idempotency.persistence.ttl",
+      "type": "java.time.Duration",
+      "defaultValue": "365d",
+      "description": "Marker written to expires_at for physical cleanup (default 365d). Always set from properties; use the service builder with null to omit expires_at. Does not affect request-path visibility."
+    },
+    {
+      "name": "idempotency.persistence.lookup-before-acquire",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "When true, persistence is queried before acquire on a cache miss. Default false is insert-first."
+    },
+    {
+      "name": "idempotency.persistence.cleanup.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Enable the scheduled physical DELETE of expired persistence rows."
+    },
+    {
+      "name": "idempotency.persistence.cleanup.cron",
+      "type": "java.lang.String",
+      "defaultValue": "0 0 3 * * SAT,SUN",
+      "description": "Cron expression for the persistence cleanup job."
+    },
+    {
+      "name": "idempotency.persistence.cleanup.batch-size",
+      "type": "java.lang.Integer",
+      "defaultValue": 1000,
+      "description": "Maximum rows deleted per cleanup batch iteration."
+    }
+  ],
+  "hints": [
+    {
+      "name": "idempotency.distributed-cache.failure-policy",
+      "values": [
+        {
+          "value": "fail-open",
+          "description": "Default. Redis failures are logged and treated as cache misses; the request proceeds to persistence."
+        },
+        {
+          "value": "fail-fast",
+          "description": "Redis failures propagate to the caller. Use only when serving without the distributed cache is unacceptable."
+        }
+      ]
+    }
+  ]
+}

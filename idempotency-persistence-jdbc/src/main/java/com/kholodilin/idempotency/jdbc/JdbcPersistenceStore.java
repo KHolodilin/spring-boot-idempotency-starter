@@ -3,7 +3,6 @@ package com.kholodilin.idempotency.jdbc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -11,9 +10,9 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.PersistenceStore;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,16 +24,16 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * ever opened, so idempotency state and business state commit atomically.
  *
  * <p>Concurrency is arbitrated by the primary key {@code (operation, idempotency_key)}:
- * {@link #acquire} uses {@code INSERT ... ON CONFLICT}, so a concurrent duplicate blocks
- * on the index entry until the first transaction commits or rolls back. Expired records
- * are taken over atomically by the same statement.
+ * {@link #acquire} uses {@code INSERT ... ON CONFLICT DO NOTHING}, so a concurrent
+ * duplicate blocks on the index entry until the first transaction commits or rolls back.
+ * Expired rows remain visible until physically deleted by
+ * {@link JdbcIdempotencyPersistenceCleanup}.
  */
 public final class JdbcPersistenceStore implements PersistenceStore {
 
     public static final String DEFAULT_TABLE_NAME = "idempotency_records";
 
     private final JdbcClient jdbc;
-    private final Clock clock;
 
     private final String findSql;
     private final String acquireSql;
@@ -42,46 +41,35 @@ public final class JdbcPersistenceStore implements PersistenceStore {
     private final String rejectSql;
 
     public JdbcPersistenceStore(DataSource dataSource) {
-        this(dataSource, DEFAULT_TABLE_NAME, Clock.systemUTC());
+        this(dataSource, DEFAULT_TABLE_NAME);
     }
 
-    public JdbcPersistenceStore(DataSource dataSource, String tableName, Clock clock) {
+    public JdbcPersistenceStore(DataSource dataSource, String tableName) {
         Objects.requireNonNull(dataSource, "dataSource");
         this.jdbc = JdbcClient.create(dataSource);
-        this.clock = Objects.requireNonNull(clock, "clock");
         String table = validateTableName(tableName);
 
         this.findSql = """
                 SELECT operation, idempotency_key, request_hash, status, result_type, \
                 result_payload, error_code, created_at, completed_at, expires_at \
                 FROM %s \
-                WHERE operation = ? AND idempotency_key = ? \
-                AND (expires_at IS NULL OR expires_at > ?)""".formatted(table);
+                WHERE operation = ? AND idempotency_key = ?""".formatted(table);
 
         this.acquireSql = """
-                INSERT INTO %s AS t \
+                INSERT INTO %s \
                 (operation, idempotency_key, request_hash, status, created_at, expires_at) \
                 VALUES (?, ?, ?, 'PROCESSING', ?, ?) \
-                ON CONFLICT (operation, idempotency_key) DO UPDATE SET \
-                request_hash = EXCLUDED.request_hash, \
-                status = 'PROCESSING', \
-                result_type = NULL, \
-                result_payload = NULL, \
-                error_code = NULL, \
-                created_at = EXCLUDED.created_at, \
-                completed_at = NULL, \
-                expires_at = EXCLUDED.expires_at \
-                WHERE t.expires_at IS NOT NULL AND t.expires_at <= EXCLUDED.created_at""".formatted(table);
+                ON CONFLICT (operation, idempotency_key) DO NOTHING""".formatted(table);
 
         this.completeSql = """
                 UPDATE %s SET status = 'COMPLETED', result_type = ?, result_payload = ?::jsonb, \
                 completed_at = ? \
-                WHERE operation = ? AND idempotency_key = ?""".formatted(table);
+                WHERE operation = ? AND idempotency_key = ? AND status = 'PROCESSING'""".formatted(table);
 
         this.rejectSql = """
                 UPDATE %s SET status = 'REJECTED', error_code = ?, result_payload = ?::jsonb, \
                 completed_at = ? \
-                WHERE operation = ? AND idempotency_key = ?""".formatted(table);
+                WHERE operation = ? AND idempotency_key = ? AND status = 'PROCESSING'""".formatted(table);
     }
 
     @Override
@@ -89,7 +77,6 @@ public final class JdbcPersistenceStore implements PersistenceStore {
         return jdbc.sql(findSql)
                 .param(1, key.operation())
                 .param(2, key.key())
-                .param(3, offset(clock.instant()))
                 .query(JdbcPersistenceStore::mapRecord)
                 .optional();
     }

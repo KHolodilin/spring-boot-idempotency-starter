@@ -46,7 +46,6 @@ public class IdempotencyJdbcAutoConfiguration {
             IdempotencyProperties properties,
             // enforces schema initialization before the store is usable
             JdbcSchemaManager idempotencySchemaManager) {
-        return new JdbcPersistenceStore(
-                dataSource, properties.getPersistence().getTableName(), java.time.Clock.systemUTC());
+        return new JdbcPersistenceStore(dataSource, properties.getPersistence().getTableName());
     }
 }

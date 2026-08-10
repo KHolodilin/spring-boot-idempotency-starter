@@ -1,19 +1,16 @@
 package com.kholodilin.idempotency.redis;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.kholodilin.idempotency.ExecutionResult;
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
 import com.kholodilin.idempotency.core.DefaultIdempotencyService;
-import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.testsupport.InMemoryStore;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import org.junit.jupiter.api.AfterAll;
@@ -73,7 +70,7 @@ class RedisCacheAsideIntegrationTest {
     }
 
     private DefaultIdempotencyService service(CaffeineLocalCache caffeine, RedisDistributedCache redis) {
-        return DefaultIdempotencyService.builder(store)
+        return new DefaultIdempotencyServiceBuilder(store)
                 .localCache(caffeine)
                 .distributedCache(redis)
                 .requireActiveTransaction(false)
@@ -120,7 +117,7 @@ class RedisCacheAsideIntegrationTest {
     @Test
     void persistenceHitIsPromotedToRedisAndCaffeine() {
         // outcome exists only in persistence (e.g. caches were cold-restarted)
-        DefaultIdempotencyService noCacheService = DefaultIdempotencyService.builder(store)
+        DefaultIdempotencyService noCacheService = new DefaultIdempotencyServiceBuilder(store)
                 .requireActiveTransaction(false)
                 .build();
         noCacheService.execute("CREATE_PAYMENT", "cold-1", "req", PaymentResult.class, this::action);
@@ -169,40 +166,6 @@ class RedisCacheAsideIntegrationTest {
             assertThat(replayed).isEqualTo(first);
         } finally {
             dead.destroy();
-        }
-    }
-
-    static final class InMemoryStore implements PersistenceStore {
-
-        final Map<IdempotencyKey, IdempotencyRecord> data = new HashMap<>();
-        final AtomicInteger findCalls = new AtomicInteger();
-
-        @Override
-        public synchronized Optional<IdempotencyRecord> find(IdempotencyKey key) {
-            findCalls.incrementAndGet();
-            return Optional.ofNullable(data.get(key));
-        }
-
-        @Override
-        public synchronized boolean acquire(
-                IdempotencyKey key, String requestHash, Instant createdAt, Instant expiresAt) {
-            if (data.containsKey(key)) {
-                return false;
-            }
-            data.put(key, IdempotencyRecord.processing(key, requestHash, createdAt, expiresAt));
-            return true;
-        }
-
-        @Override
-        public synchronized void complete(
-                IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.completed(resultType, resultPayload, completedAt));
-        }
-
-        @Override
-        public synchronized void reject(
-                IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.rejected(errorCode, detailsPayload, completedAt));
         }
     }
 }

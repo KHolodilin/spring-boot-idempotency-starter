@@ -1,4 +1,4 @@
-package com.kholodilin.idempotency;
+package com.kholodilin.idempotency.model;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * @param errorCode     business rejection code (REJECTED only)
  * @param createdAt     when the record was acquired
  * @param completedAt   when the terminal status was reached
- * @param expiresAt     after this instant the record is treated as absent
+ * @param expiresAt     cleanup marker for physical DELETE jobs; not used on the request path
  */
 public record IdempotencyRecord(
         IdempotencyKey key,
@@ -70,12 +70,5 @@ public record IdempotencyRecord(
                 createdAt,
                 completedAt,
                 expiresAt);
-    }
-
-    /**
-     * @return {@code true} if the record has an expiration instant that is not after {@code now}
-     */
-    public boolean isExpired(Instant now) {
-        return expiresAt != null && !expiresAt.isAfter(now);
     }
 }

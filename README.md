@@ -40,18 +40,22 @@ flowchart LR
 Execution flow of `execute(...)`:
 
 1. The request fingerprint is calculated (canonical JSON + SHA-256).
-2. Record lookup: L1 → L2 → PostgreSQL (a hit in a lower layer is promoted upwards).
-3. Record found with a matching fingerprint → the stored outcome is replayed, the action
-   is **not executed**. Different fingerprint → `IdempotencyConflictException`
-   (same key, different payload).
-4. No record → `INSERT ... ON CONFLICT DO NOTHING` acquires the key (`PROCESSING`).
-   A concurrent duplicate blocks at the database level until the first transaction
-   commits, then receives a replay of its result — the action executes exactly once.
-5. The action returns an `ExecutionResult`: `Success` → `COMPLETED`, `Rejected` →
+2. Cache lookup: L1 → L2 (a hit in L2 is promoted to L1).
+3. Optional persistence find when `idempotency.persistence.lookup-before-acquire=true`
+   (default is `false`: insert-first).
+4. Cache/optional-find miss → `INSERT ... ON CONFLICT DO NOTHING`. On conflict the
+   service finds the committed terminal row and replays it. A concurrent duplicate
+   blocks on the unique index until the first transaction commits or rolls back.
+5. Matching fingerprint → replay (action **not** executed). Different fingerprint →
+   `IdempotencyConflictException`.
+6. The action returns an `ExecutionResult`: `Success` → `COMPLETED`, `Rejected` →
    `REJECTED`. The outcome is persisted in the caller's transaction.
-6. A technical exception from the action propagates → rollback → no record → a retry
+7. A technical exception from the action propagates → rollback → no record → a retry
    executes the operation from scratch.
-7. After the commit (and only then) the outcome is written to Redis and Caffeine.
+8. After the commit (and only then) the outcome is written to Redis and Caffeine.
+
+Rows remain replayable until physically deleted. `expires_at` is only a cleanup marker
+(written from `persistence.ttl`); it is not consulted on the request path.
 
 ## Quick start
 
@@ -61,32 +65,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0-SNAPSHOT</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.1")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.2.0-SNAPSHOT")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.1")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.1")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.2.0-SNAPSHOT")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.2.0-SNAPSHOT")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -119,6 +123,9 @@ public class PaymentService {
 ### Controller: `valueOrThrow()` + a global handler
 
 ```java
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
+
 @PostMapping("/payments")
 @ResponseStatus(HttpStatus.CREATED)
 PaymentResult create(@RequestHeader("Idempotency-Key") String key,
@@ -181,9 +188,14 @@ idempotency:
   persistence:
     enabled: true
     table-name: idempotency_records    # may be schema-qualified: billing.idempotency_records
-    ttl: 24h                           # replay window; expired records become invisible
+    ttl: 365d                          # expires_at marker for cleanup (always set from properties)
+    lookup-before-acquire: false       # true = DB find before INSERT (better cold-duplicate latency)
     schema:
       mode: validate                   # create | validate | none
+    cleanup:
+      enabled: false                   # recommended true in production
+      cron: "0 0 3 * * SAT,SUN"
+      batch-size: 1000
 ```
 
 ### Schema management
@@ -235,13 +247,20 @@ DistributedCache distributedCache() { ... }
 
 @Bean
 IdempotencySerializer idempotencySerializer() { ... }
+
+@Bean
+TransactionContext transactionContext() { ... }        // default: SpringTransactionContext
+
+@Bean
+IdempotencyMetrics idempotencyMetrics() { ... }         // default: Micrometer when MeterRegistry present
 ```
 
 ### Metrics (Micrometer)
 
-When a `MeterRegistry` is present, the following counters are registered automatically:
+When a `MeterRegistry` is present, the following meters are registered automatically:
 `idempotency.lookup.hits{level}`, `idempotency.replays{status}`, `idempotency.conflicts`,
-`idempotency.acquired`, `idempotency.persisted{status}`.
+`idempotency.acquired`, `idempotency.acquire.conflicts`, `idempotency.acquire.wait`,
+`idempotency.persisted{status}`.
 
 ## Demo
 
@@ -302,12 +321,15 @@ blocks on the unique index until the first transaction commits, then receives a 
 of its outcome. The business action executes exactly once.
 
 **How do I clean up expired records?**
-Logically expired records (`expires_at < now()`) are invisible and can be re-acquired.
-Do physical cleanup with a periodic job — the index is already in place:
+While a row exists it is replayed / conflicts — TTL does not hide it. Enable the built-in
+job (`idempotency.persistence.cleanup.enabled=true`) or call
+`IdempotencyPersistenceCleanup#deleteExpired`. JDBC cleanup uses
+`FOR UPDATE SKIP LOCKED` so it does not block hot request transactions.
 
-```sql
-DELETE FROM idempotency_records WHERE expires_at IS NOT NULL AND expires_at < now();
-```
+**When should I enable `lookup-before-acquire`?**
+Default insert-first (`false`) avoids a DB round-trip on first-seen keys. Set
+`idempotency.persistence.lookup-before-acquire=true` if cold duplicates are common and
+you want a persistence find before `INSERT` (replays without waiting on PK conflict).
 
 **Are result-less operations supported?**
 Yes: `resultType = Void.class`, `ExecutionResult.success(null)`.

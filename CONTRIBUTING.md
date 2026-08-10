@@ -43,8 +43,8 @@ if possible.
 Formatting is fully automated — run `mvn spotless:apply` before committing.
 A few conventions beyond formatting:
 
-- Javadoc on public API (packages `com.kholodilin.idempotency`, `...spi`) explains
-  behavior and contracts, not implementation details.
+- Javadoc on public API (packages `com.kholodilin.idempotency`, `...model`,
+  `...exception`, `...spi`) explains behavior and contracts, not implementation details.
 - Comments explain *why*, not *what*.
 - New SPI implementations belong in their own module, following the existing
   `idempotency-local-cache-caffeine` / `idempotency-distributed-cache-redis` layout.

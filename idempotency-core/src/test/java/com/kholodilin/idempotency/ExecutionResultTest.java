@@ -2,6 +2,7 @@ package com.kholodilin.idempotency;
 
 import java.util.Map;
 
+import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 

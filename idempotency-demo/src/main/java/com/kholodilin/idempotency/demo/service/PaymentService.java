@@ -11,6 +11,7 @@ import com.kholodilin.idempotency.demo.model.PaymentResult;
 import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.model.RefundResult;
 import com.kholodilin.idempotency.demo.repository.PaymentRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * controller's responsibility.
  */
 @Service
+@RequiredArgsConstructor
 public class PaymentService {
 
     /** Demo account balance: payments above this amount are rejected. */
@@ -32,15 +34,6 @@ public class PaymentService {
     private final IdempotencyService idempotencyService;
     private final PaymentRepository paymentRepository;
     private final FailureSimulator failureSimulator;
-
-    public PaymentService(
-            IdempotencyService idempotencyService,
-            PaymentRepository paymentRepository,
-            FailureSimulator failureSimulator) {
-        this.idempotencyService = idempotencyService;
-        this.paymentRepository = paymentRepository;
-        this.failureSimulator = failureSimulator;
-    }
 
     @Transactional
     public ExecutionResult<PaymentResult> createPayment(String idempotencyKey, CreatePaymentRequest request) {

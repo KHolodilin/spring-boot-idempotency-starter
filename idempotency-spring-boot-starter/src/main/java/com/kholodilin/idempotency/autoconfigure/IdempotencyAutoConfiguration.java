@@ -1,7 +1,7 @@
 package com.kholodilin.idempotency.autoconfigure;
 
 import com.kholodilin.idempotency.IdempotencyService;
-import com.kholodilin.idempotency.core.DefaultIdempotencyService;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
 import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
 import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.spi.DistributedCache;
@@ -10,6 +10,7 @@ import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
+import com.kholodilin.idempotency.spi.TransactionContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -47,6 +48,12 @@ public class IdempotencyAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public TransactionContext idempotencyTransactionContext() {
+        return new SpringTransactionContext();
+    }
+
+    @Bean
     @ConditionalOnMissingBean(IdempotencyService.class)
     @ConditionalOnBean(PersistenceStore.class)
     public IdempotencyService idempotencyService(
@@ -54,16 +61,19 @@ public class IdempotencyAutoConfiguration {
             PersistenceStore persistenceStore,
             FingerprintStrategy fingerprintStrategy,
             IdempotencySerializer serializer,
+            TransactionContext transactionContext,
             ObjectProvider<LocalCache> localCache,
             ObjectProvider<DistributedCache> distributedCache,
             ObjectProvider<IdempotencyMetrics> metrics) {
-        return DefaultIdempotencyService.builder(persistenceStore)
+        return new DefaultIdempotencyServiceBuilder(persistenceStore)
                 .fingerprintStrategy(fingerprintStrategy)
                 .serializer(serializer)
+                .transactionContext(transactionContext)
                 .localCache(localCache.getIfAvailable())
                 .distributedCache(distributedCache.getIfAvailable())
                 .metrics(metrics.getIfAvailable(() -> IdempotencyMetrics.NOOP))
                 .persistenceTtl(properties.getPersistence().getTtl())
+                .lookupBeforeAcquire(properties.getPersistence().isLookupBeforeAcquire())
                 .build();
     }
 }

@@ -18,11 +18,12 @@ import javax.sql.DataSource;
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
-import com.kholodilin.idempotency.IdempotencyConflictException;
-import com.kholodilin.idempotency.IdempotencyKey;
-import com.kholodilin.idempotency.IdempotencyRecord;
-import com.kholodilin.idempotency.IdempotencyStatus;
 import com.kholodilin.idempotency.core.DefaultIdempotencyService;
+import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
+import com.kholodilin.idempotency.exception.IdempotencyConflictException;
+import com.kholodilin.idempotency.model.IdempotencyKey;
+import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,8 +81,8 @@ class PostgresIdempotencyIntegrationTest {
     @BeforeEach
     void initSubjects() {
         JdbcClient.create(dataSource).sql("DELETE FROM idempotency_records").update();
-        store = new JdbcPersistenceStore(dataSource, "idempotency_records", clock);
-        service = DefaultIdempotencyService.builder(store)
+        store = new JdbcPersistenceStore(dataSource, "idempotency_records");
+        service = new DefaultIdempotencyServiceBuilder(store)
                 .clock(clock)
                 .persistenceTtl(Duration.ofHours(24))
                 .build();
@@ -140,10 +141,47 @@ class PostgresIdempotencyIntegrationTest {
     }
 
     @Test
-    void expiredRecordIsInvisibleAndCanBeTakenOver() {
+    void defaultConstructorsAndGuards() {
+        JdbcPersistenceStore defaultStore = new JdbcPersistenceStore(dataSource);
+        JdbcIdempotencyPersistenceCleanup defaultCleanup = new JdbcIdempotencyPersistenceCleanup(dataSource);
+        IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "guards-1");
+
+        assertThatThrownBy(() -> defaultCleanup.deleteExpired(clock.instant(), 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit");
+
+        tx.executeWithoutResult(status -> {
+            assertThat(defaultStore.acquire(key, "h", clock.instant(), null)).isTrue();
+            IdempotencyRecord processing = defaultStore.find(key).orElseThrow();
+            assertThat(processing.completedAt()).isNull();
+            assertThat(processing.expiresAt()).isNull();
+            defaultStore.complete(key, null, null, clock.instant());
+        });
+
+        assertThatThrownBy(() ->
+                        tx.executeWithoutResult(status -> defaultStore.complete(key, null, null, clock.instant())))
+                .as("complete must require a PROCESSING row")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("complete");
+
+        assertThatThrownBy(
+                        () -> tx.executeWithoutResult(status -> defaultStore.reject(key, "X", null, clock.instant())))
+                .as("reject must require a PROCESSING row")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reject");
+
+        Integer deleted = tx.execute(
+                status -> defaultCleanup.deleteExpired(clock.instant().plusSeconds(1), 10));
+        assertThat(deleted).isZero();
+    }
+
+    @Test
+    void expiredRecordRemainsVisibleUntilPhysicallyDeleted() {
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "exp-1");
         Instant createdAt = clock.instant();
         Instant expiresAt = createdAt.plusSeconds(60);
+        JdbcIdempotencyPersistenceCleanup cleanup =
+                new JdbcIdempotencyPersistenceCleanup(dataSource, "idempotency_records");
 
         tx.executeWithoutResult(status -> {
             store.acquire(key, "hash-old", createdAt, expiresAt);
@@ -153,18 +191,20 @@ class PostgresIdempotencyIntegrationTest {
         clock.advance(Duration.ofSeconds(120));
 
         assertThat(store.find(key))
-                .as("expired record must be treated as absent")
-                .isEmpty();
+                .as("TTL must not hide rows on the request path")
+                .isPresent();
+        tx.executeWithoutResult(status -> assertThat(store.acquire(
+                        key, "hash-new", clock.instant(), clock.instant().plusSeconds(60)))
+                .as("occupied key must not be re-acquired before cleanup")
+                .isFalse());
+
+        int deleted = tx.execute(status -> cleanup.deleteExpired(clock.instant(), 100));
+        assertThat(deleted).isEqualTo(1);
+        assertThat(store.find(key)).isEmpty();
 
         tx.executeWithoutResult(status -> assertThat(store.acquire(
                         key, "hash-new", clock.instant(), clock.instant().plusSeconds(60)))
-                .as("expired record must be taken over by a new acquire")
                 .isTrue());
-
-        Optional<IdempotencyRecord> takenOver = store.find(key);
-        assertThat(takenOver).isPresent();
-        assertThat(takenOver.get().requestHash()).isEqualTo("hash-new");
-        assertThat(takenOver.get().status()).isEqualTo(IdempotencyStatus.PROCESSING);
     }
 
     // ------------------------------------------------------------------ service + real transactions
@@ -260,14 +300,26 @@ class PostgresIdempotencyIntegrationTest {
     }
 
     @Test
-    void expiredOutcomeAllowsReExecution() {
+    void outcomeIsReplayedUntilPhysicallyDeleted() {
+        JdbcIdempotencyPersistenceCleanup cleanup =
+                new JdbcIdempotencyPersistenceCleanup(dataSource, "idempotency_records");
+
         tx.executeWithoutResult(
                 status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
                     actionCalls.incrementAndGet();
                     return ExecutionResult.success(new PaymentResult("pay-old"));
                 }));
 
-        clock.advance(Duration.ofHours(25)); // beyond the 24h persistence TTL
+        clock.advance(Duration.ofHours(25));
+
+        ExecutionResult<PaymentResult> replayed =
+                tx.execute(status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
+                    throw new AssertionError("action must not run while the row exists");
+                }));
+        assertThat(actionCalls).hasValue(1);
+        assertThat(((Success<PaymentResult>) replayed).value()).isEqualTo(new PaymentResult("pay-old"));
+
+        tx.executeWithoutResult(status -> cleanup.deleteExpired(clock.instant(), 100));
 
         ExecutionResult<PaymentResult> second =
                 tx.execute(status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
