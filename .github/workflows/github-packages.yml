@@ -7,6 +7,11 @@ on:
         description: Git tag / version to publish (e.g. v0.2.0)
         required: true
         type: string
+      replace:
+        description: Delete existing package versions before publish (needed to republish)
+        required: false
+        type: boolean
+        default: true
   push:
     tags: [ "v*" ]
 
@@ -41,6 +46,30 @@ jobs:
           VERSION="${REF#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing version $VERSION from $REF"
+
+      - name: Remove existing packages for version
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.replace }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OWNER="${{ github.repository_owner }}"
+          PACKAGES=(
+            com.kholodilin.spring-boot-idempotency-starter-parent
+            com.kholodilin.idempotency-core
+            com.kholodilin.idempotency-persistence-jdbc
+            com.kholodilin.idempotency-local-cache-caffeine
+            com.kholodilin.idempotency-distributed-cache-redis
+            com.kholodilin.spring-boot-idempotency-starter
+          )
+          for pkg in "${PACKAGES[@]}"; do
+            if gh api "/users/${OWNER}/packages/maven/${pkg}" >/dev/null 2>&1; then
+              echo "Deleting package ${pkg}"
+              gh api -X DELETE "/users/${OWNER}/packages/maven/${pkg}"
+            else
+              echo "Package ${pkg} not present, skip"
+            fi
+          done
 
       - name: Set release version
         run: mvn -B -ntp versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false
