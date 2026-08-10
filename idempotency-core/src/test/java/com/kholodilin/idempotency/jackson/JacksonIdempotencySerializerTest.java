@@ -35,5 +35,7 @@ class JacksonIdempotencySerializerTest {
     @Test
     void voidTypeAlwaysDeserializesToNull() {
         assertThat(serializer.deserialize("{}", Void.class)).isNull();
+        assertThat(serializer.deserialize("{}", void.class)).isNull();
+        assertThat(serializer.deserialize(null, PaymentResult.class)).isNull();
     }
 }

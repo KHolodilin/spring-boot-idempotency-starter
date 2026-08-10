@@ -141,6 +141,41 @@ class PostgresIdempotencyIntegrationTest {
     }
 
     @Test
+    void defaultConstructorsAndGuards() {
+        JdbcPersistenceStore defaultStore = new JdbcPersistenceStore(dataSource);
+        JdbcIdempotencyPersistenceCleanup defaultCleanup = new JdbcIdempotencyPersistenceCleanup(dataSource);
+        IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "guards-1");
+
+        assertThatThrownBy(() -> defaultCleanup.deleteExpired(clock.instant(), 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit");
+
+        tx.executeWithoutResult(status -> {
+            assertThat(defaultStore.acquire(key, "h", clock.instant(), null)).isTrue();
+            IdempotencyRecord processing = defaultStore.find(key).orElseThrow();
+            assertThat(processing.completedAt()).isNull();
+            assertThat(processing.expiresAt()).isNull();
+            defaultStore.complete(key, null, null, clock.instant());
+        });
+
+        assertThatThrownBy(() ->
+                        tx.executeWithoutResult(status -> defaultStore.complete(key, null, null, clock.instant())))
+                .as("complete must require a PROCESSING row")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("complete");
+
+        assertThatThrownBy(
+                        () -> tx.executeWithoutResult(status -> defaultStore.reject(key, "X", null, clock.instant())))
+                .as("reject must require a PROCESSING row")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reject");
+
+        Integer deleted = tx.execute(
+                status -> defaultCleanup.deleteExpired(clock.instant().plusSeconds(1), 10));
+        assertThat(deleted).isZero();
+    }
+
+    @Test
     void expiredRecordRemainsVisibleUntilPhysicallyDeleted() {
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "exp-1");
         Instant createdAt = clock.instant();
