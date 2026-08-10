@@ -88,6 +88,10 @@
         <profile>
             <id>release</id>
         </profile>
+        <!-- Same id as parent github-packages profile: skip reactor-only test-jar on publish. -->
+        <profile>
+            <id>github-packages</id>
+        </profile>
     </profiles>
 </project>
 
