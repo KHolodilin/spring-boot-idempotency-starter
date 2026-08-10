@@ -1,0 +1,25 @@
+{
+  "properties": [
+    {
+      "name": "idempotency.distributed-cache.failure-policy",
+      "type": "java.lang.String",
+      "defaultValue": "fail-open",
+      "description": "Behaviour when Redis is unavailable: fail-open treats Redis errors as cache misses; fail-fast propagates them to the caller."
+    }
+  ],
+  "hints": [
+    {
+      "name": "idempotency.distributed-cache.failure-policy",
+      "values": [
+        {
+          "value": "fail-open",
+          "description": "Default. Redis failures are logged and treated as cache misses; the request proceeds to persistence."
+        },
+        {
+          "value": "fail-fast",
+          "description": "Redis failures propagate to the caller. Use only when serving without the distributed cache is unacceptable."
+        }
+      ]
+    }
+  ]
+}

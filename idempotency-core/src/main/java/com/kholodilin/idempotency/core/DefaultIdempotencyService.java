@@ -1,11 +1,12 @@
 package com.kholodilin.idempotency.core;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.kholodilin.idempotency.ExecutionResult;
@@ -132,9 +133,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         ExecutionResult<RS> outcome;
         switch (result) {
             case Success<RS> success -> {
-                String payload = success.value() == null
-                        ? null
-                        : new String(serializer.serialize(success.value()), StandardCharsets.UTF_8);
+                String payload = success.value() == null ? null : serializer.serialize(success.value());
                 persistenceStore.complete(key, resultType.getName(), payload, completedAt);
                 terminal = processing.completed(resultType.getName(), payload, completedAt);
                 outcome = success;
@@ -158,26 +157,18 @@ public final class DefaultIdempotencyService implements IdempotencyService {
 
     private @Nullable IdempotencyRecord lookup(IdempotencyKey key) {
         if (localCache != null) {
-            IdempotencyRecord record = localCache.get(key).orElse(null);
-            if (record != null) {
-                if (isUsable(record)) {
-                    metrics.lookupHit(LEVEL_LOCAL);
-                    return record;
-                }
-                localCache.evict(key);
+            IdempotencyRecord hit = readCache(key, localCache::get, localCache::evict, LEVEL_LOCAL);
+            if (hit != null) {
+                return hit;
             }
         }
         if (distributedCache != null) {
-            IdempotencyRecord record = distributedCache.get(key).orElse(null);
-            if (record != null) {
-                if (isUsable(record)) {
-                    metrics.lookupHit(LEVEL_DISTRIBUTED);
-                    if (localCache != null) {
-                        localCache.put(key, record);
-                    }
-                    return record;
+            IdempotencyRecord hit = readCache(key, distributedCache::get, distributedCache::evict, LEVEL_DISTRIBUTED);
+            if (hit != null) {
+                if (localCache != null) {
+                    localCache.put(key, hit);
                 }
-                distributedCache.evict(key);
+                return hit;
             }
         }
         IdempotencyRecord record = persistenceStore.find(key).orElse(null);
@@ -189,6 +180,23 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         return null;
     }
 
+    private @Nullable IdempotencyRecord readCache(
+            IdempotencyKey key,
+            Function<IdempotencyKey, Optional<IdempotencyRecord>> get,
+            Consumer<IdempotencyKey> evict,
+            String level) {
+        IdempotencyRecord record = get.apply(key).orElse(null);
+        if (record == null) {
+            return null;
+        }
+        if (isUsable(record)) {
+            metrics.lookupHit(level);
+            return record;
+        }
+        evict.accept(key);
+        return null;
+    }
+
     private <RS> ExecutionResult<RS> replay(IdempotencyRecord record, String fingerprint, Class<RS> resultType) {
         if (!record.requestHash().equals(fingerprint)) {
             metrics.conflict();
@@ -196,12 +204,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         }
         metrics.replayed(record.status());
         return switch (record.status()) {
-            case COMPLETED -> {
-                RS value = record.resultPayload() == null
-                        ? null
-                        : serializer.deserialize(record.resultPayload().getBytes(StandardCharsets.UTF_8), resultType);
-                yield ExecutionResult.success(value);
-            }
+            case COMPLETED -> ExecutionResult.success(serializer.deserialize(record.resultPayload(), resultType));
             case REJECTED ->
                 new Rejected<>(
                         Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),

@@ -1,6 +1,5 @@
 package com.kholodilin.idempotency.jackson;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import com.kholodilin.idempotency.spi.IdempotencySerializer;
@@ -23,16 +22,16 @@ public final class JacksonIdempotencySerializer implements IdempotencySerializer
     }
 
     @Override
-    public byte[] serialize(@Nullable Object value) {
+    public String serialize(@Nullable Object value) {
         if (value == null) {
-            return "null".getBytes(StandardCharsets.UTF_8);
+            return "null";
         }
-        return mapper.writeValueAsBytes(value);
+        return mapper.writeValueAsString(value);
     }
 
     @Override
-    public <T> @Nullable T deserialize(byte[] value, Class<T> type) {
-        if (type == Void.class || type == void.class) {
+    public <T> @Nullable T deserialize(@Nullable String value, Class<T> type) {
+        if (type == Void.class || type == void.class || value == null) {
             return null;
         }
         return mapper.readValue(value, type);

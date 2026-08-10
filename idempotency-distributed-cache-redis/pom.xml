@@ -40,6 +40,12 @@
 
         <dependency>
             <groupId>com.kholodilin</groupId>
+            <artifactId>idempotency-core</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.kholodilin</groupId>
             <artifactId>idempotency-local-cache-caffeine</artifactId>
             <scope>test</scope>
         </dependency>

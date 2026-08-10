@@ -10,8 +10,9 @@ import com.kholodilin.idempotency.model.IdempotencyRecord;
  * records.
  *
  * <p>Only terminal, committed records are ever stored. Persistence remains the source
- * of truth. Implementations are expected to fail open: a cache infrastructure failure
- * must not fail the business operation.
+ * of truth. Fail-open on cache infrastructure errors is the recommended default so a
+ * Redis outage does not fail the business operation; concrete implementations may expose
+ * a stricter fail-fast policy as an opt-in.
  */
 public interface DistributedCache {
 

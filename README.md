@@ -61,32 +61,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2-SNAPSHOT</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.1")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.1.2-SNAPSHOT")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.1")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.1")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.1.2-SNAPSHOT")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.1.2-SNAPSHOT")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -238,6 +238,12 @@ DistributedCache distributedCache() { ... }
 
 @Bean
 IdempotencySerializer idempotencySerializer() { ... }
+
+@Bean
+TransactionContext transactionContext() { ... }        // default: SpringTransactionContext
+
+@Bean
+IdempotencyMetrics idempotencyMetrics() { ... }         // default: Micrometer when MeterRegistry present
 ```
 
 ### Metrics (Micrometer)

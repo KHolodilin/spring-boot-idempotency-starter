@@ -6,9 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -20,10 +18,10 @@ import com.kholodilin.idempotency.exception.MissingTransactionException;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
-import com.kholodilin.idempotency.spi.DistributedCache;
-import com.kholodilin.idempotency.spi.LocalCache;
 import com.kholodilin.idempotency.spi.PersistenceStore;
 import com.kholodilin.idempotency.spi.TransactionContext;
+import com.kholodilin.idempotency.testsupport.InMemoryCache;
+import com.kholodilin.idempotency.testsupport.InMemoryStore;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -398,70 +396,5 @@ class DefaultIdempotencyServiceTest {
                 new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy().calculate(command);
         return IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), fingerprint, NOW.minusSeconds(60), null)
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"pay-42\"}", NOW.minusSeconds(60));
-    }
-
-    static final class InMemoryStore implements PersistenceStore {
-
-        final Map<IdempotencyKey, IdempotencyRecord> data = new HashMap<>();
-        final AtomicInteger findCalls = new AtomicInteger();
-        final AtomicInteger acquireCalls = new AtomicInteger();
-        private final Clock clock;
-
-        InMemoryStore(Clock clock) {
-            this.clock = clock;
-        }
-
-        @Override
-        public Optional<IdempotencyRecord> find(IdempotencyKey key) {
-            findCalls.incrementAndGet();
-            return Optional.ofNullable(data.get(key)).filter(r -> !r.isExpired(clock.instant()));
-        }
-
-        @Override
-        public boolean acquire(IdempotencyKey key, String requestHash, Instant createdAt, Instant expiresAt) {
-            acquireCalls.incrementAndGet();
-            IdempotencyRecord existing = data.get(key);
-            if (existing != null && !existing.isExpired(clock.instant())) {
-                return false;
-            }
-            data.put(key, IdempotencyRecord.processing(key, requestHash, createdAt, expiresAt));
-            return true;
-        }
-
-        @Override
-        public void complete(IdempotencyKey key, String resultType, String resultPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.completed(resultType, resultPayload, completedAt));
-        }
-
-        @Override
-        public void reject(IdempotencyKey key, String errorCode, String detailsPayload, Instant completedAt) {
-            data.compute(key, (k, r) -> r.rejected(errorCode, detailsPayload, completedAt));
-        }
-    }
-
-    static final class InMemoryCache implements LocalCache, DistributedCache {
-
-        final Map<IdempotencyKey, IdempotencyRecord> data = new HashMap<>();
-        final AtomicInteger gets = new AtomicInteger();
-        final AtomicInteger puts = new AtomicInteger();
-        final AtomicInteger evicts = new AtomicInteger();
-
-        @Override
-        public Optional<IdempotencyRecord> get(IdempotencyKey key) {
-            gets.incrementAndGet();
-            return Optional.ofNullable(data.get(key));
-        }
-
-        @Override
-        public void put(IdempotencyKey key, IdempotencyRecord record) {
-            puts.incrementAndGet();
-            data.put(key, record);
-        }
-
-        @Override
-        public void evict(IdempotencyKey key) {
-            evicts.incrementAndGet();
-            data.remove(key);
-        }
     }
 }

@@ -22,9 +22,9 @@ public class IdempotencyProperties {
 
     private final Fingerprint fingerprint = new Fingerprint();
 
-    private final LocalCache localCache = new LocalCache();
+    private final LocalCacheSettings localCache = new LocalCacheSettings();
 
-    private final DistributedCache distributedCache = new DistributedCache();
+    private final DistributedCacheSettings distributedCache = new DistributedCacheSettings();
 
     private final Persistence persistence = new Persistence();
 
@@ -38,9 +38,13 @@ public class IdempotencyProperties {
         private String algorithm = "SHA-256";
     }
 
+    /**
+     * Settings for the optional L1 local cache ({@code idempotency.local-cache.*}).
+     * Named distinctly from the SPI {@code LocalCache} type.
+     */
     @Getter
     @Setter
-    public static class LocalCache {
+    public static class LocalCacheSettings {
 
         /**
          * Enable the Caffeine local cache (requires idempotency-local-cache-caffeine on
@@ -64,9 +68,13 @@ public class IdempotencyProperties {
         private boolean statistics = false;
     }
 
+    /**
+     * Settings for the optional L2 distributed cache ({@code idempotency.distributed-cache.*}).
+     * Named distinctly from the SPI {@code DistributedCache} type.
+     */
     @Getter
     @Setter
-    public static class DistributedCache {
+    public static class DistributedCacheSettings {
 
         /**
          * Enable the Redis distributed cache (requires idempotency-distributed-cache-redis

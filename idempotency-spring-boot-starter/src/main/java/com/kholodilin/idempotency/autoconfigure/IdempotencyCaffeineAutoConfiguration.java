@@ -23,7 +23,7 @@ public class IdempotencyCaffeineAutoConfiguration {
     @ConditionalOnMissingBean(LocalCache.class)
     @ConditionalOnProperty(name = "idempotency.local-cache.enabled", matchIfMissing = true)
     public CaffeineLocalCache caffeineIdempotencyLocalCache(IdempotencyProperties properties) {
-        IdempotencyProperties.LocalCache config = properties.getLocalCache();
+        IdempotencyProperties.LocalCacheSettings config = properties.getLocalCache();
         return new CaffeineLocalCache(config.getTtl(), config.getMaxSize(), config.isStatistics());
     }
 }
