@@ -34,7 +34,9 @@ jobs:
         run: mvn -B -ntp clean verify
 
       - name: Publish to Maven Central
-        run: mvn -B -ntp deploy -P release -DskipTests
+        # -P release disables idempotency-core test-jar and redis's test-jar dependency.
+        # maven.test.skip skips re-running tests on the deploy invocation.
+        run: mvn -B -ntp deploy -P release -Dmaven.test.skip=true
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -44,9 +46,21 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+          # Main artifacts only (exclude tests/sources/javadoc left from verify).
           files: |
             idempotency-core/target/idempotency-core-*.jar
+            !idempotency-core/target/*-tests.jar
+            !idempotency-core/target/*-sources.jar
+            !idempotency-core/target/*-javadoc.jar
             idempotency-persistence-jdbc/target/idempotency-persistence-jdbc-*.jar
+            !idempotency-persistence-jdbc/target/*-sources.jar
+            !idempotency-persistence-jdbc/target/*-javadoc.jar
             idempotency-local-cache-caffeine/target/idempotency-local-cache-caffeine-*.jar
+            !idempotency-local-cache-caffeine/target/*-sources.jar
+            !idempotency-local-cache-caffeine/target/*-javadoc.jar
             idempotency-distributed-cache-redis/target/idempotency-distributed-cache-redis-*.jar
+            !idempotency-distributed-cache-redis/target/*-sources.jar
+            !idempotency-distributed-cache-redis/target/*-javadoc.jar
             idempotency-spring-boot-starter/target/spring-boot-idempotency-starter-*.jar
+            !idempotency-spring-boot-starter/target/*-sources.jar
+            !idempotency-spring-boot-starter/target/*-javadoc.jar

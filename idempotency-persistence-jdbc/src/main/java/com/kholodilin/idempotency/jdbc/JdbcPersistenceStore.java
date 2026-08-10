@@ -3,7 +3,6 @@ package com.kholodilin.idempotency.jdbc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -42,15 +41,11 @@ public final class JdbcPersistenceStore implements PersistenceStore {
     private final String rejectSql;
 
     public JdbcPersistenceStore(DataSource dataSource) {
-        this(dataSource, DEFAULT_TABLE_NAME, Clock.systemUTC());
+        this(dataSource, DEFAULT_TABLE_NAME);
     }
 
-    /**
-     * @param clock retained for API compatibility; request-path queries do not filter by TTL
-     */
-    public JdbcPersistenceStore(DataSource dataSource, String tableName, Clock clock) {
+    public JdbcPersistenceStore(DataSource dataSource, String tableName) {
         Objects.requireNonNull(dataSource, "dataSource");
-        Objects.requireNonNull(clock, "clock");
         this.jdbc = JdbcClient.create(dataSource);
         String table = validateTableName(tableName);
 

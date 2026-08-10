@@ -81,7 +81,7 @@ class PostgresIdempotencyIntegrationTest {
     @BeforeEach
     void initSubjects() {
         JdbcClient.create(dataSource).sql("DELETE FROM idempotency_records").update();
-        store = new JdbcPersistenceStore(dataSource, "idempotency_records", clock);
+        store = new JdbcPersistenceStore(dataSource, "idempotency_records");
         service = new DefaultIdempotencyServiceBuilder(store)
                 .clock(clock)
                 .persistenceTtl(Duration.ofHours(24))

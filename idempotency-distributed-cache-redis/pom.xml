@@ -40,12 +40,6 @@
 
         <dependency>
             <groupId>com.kholodilin</groupId>
-            <artifactId>idempotency-core</artifactId>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.kholodilin</groupId>
             <artifactId>idempotency-local-cache-caffeine</artifactId>
             <scope>test</scope>
         </dependency>
@@ -70,4 +64,30 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <!--
+          Reactor-only test fakes. activeByDefault is turned off when this module's
+          `release` profile is selected via `mvn -P release` (Central publish).
+        -->
+        <profile>
+            <id>idempotency-core-test-jar</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>com.kholodilin</groupId>
+                    <artifactId>idempotency-core</artifactId>
+                    <type>test-jar</type>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- Same id as parent release profile: activates with -P release and disables activeByDefault. -->
+        <profile>
+            <id>release</id>
+        </profile>
+    </profiles>
 </project>
+

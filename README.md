@@ -188,7 +188,7 @@ idempotency:
   persistence:
     enabled: true
     table-name: idempotency_records    # may be schema-qualified: billing.idempotency_records
-    ttl: 365d                          # expires_at marker for physical cleanup (not request-path)
+    ttl: 365d                          # expires_at marker for cleanup (always set from properties)
     lookup-before-acquire: false       # true = DB find before INSERT (better cold-duplicate latency)
     schema:
       mode: validate                   # create | validate | none

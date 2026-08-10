@@ -10,7 +10,7 @@
       "name": "idempotency.persistence.ttl",
       "type": "java.time.Duration",
       "defaultValue": "365d",
-      "description": "Marker written to expires_at for physical cleanup jobs. Does not affect request-path visibility."
+      "description": "Marker written to expires_at for physical cleanup (default 365d). Always set from properties; use the service builder with null to omit expires_at. Does not affect request-path visibility."
     },
     {
       "name": "idempotency.persistence.lookup-before-acquire",

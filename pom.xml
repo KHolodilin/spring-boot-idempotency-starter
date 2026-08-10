@@ -304,6 +304,13 @@
         <!-- Activated by the release workflow: sources + GPG signatures required by Maven Central -->
         <profile>
             <id>release</id>
+            <properties>
+                <!--
+                  Skip tests on publish. Combined with module release profiles that drop the
+                  reactor-only test-jar, so `mvn deploy -P release` never ships *-tests.jar.
+                -->
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
             <build>
                 <plugins>
                     <plugin>

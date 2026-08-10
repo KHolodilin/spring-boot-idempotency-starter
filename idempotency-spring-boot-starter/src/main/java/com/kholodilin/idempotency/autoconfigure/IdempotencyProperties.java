@@ -116,7 +116,9 @@ public class IdempotencyProperties {
 
         /**
          * Marker written to {@code expires_at} for physical cleanup. Does not affect
-         * request-path visibility. Empty means the row is never cleaned up by TTL.
+         * request-path visibility. Default {@code 365d}; the starter always passes this
+         * value to the service (it is never {@code null} from properties). To omit
+         * {@code expires_at}, wire {@code DefaultIdempotencyServiceBuilder#persistenceTtl(null)}.
          */
         private Duration ttl = Duration.ofDays(365);
 

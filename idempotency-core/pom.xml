@@ -53,6 +53,7 @@
             <!--
               Attach a test-jar so sibling modules can reuse InMemoryStore / InMemoryCache.
               Bound to test-compile so `mvn test` in the reactor resolves it before consumers run.
+              Not published to Maven Central: the release profile below disables this execution.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -69,4 +70,25 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Activated by `mvn -P release` (same id as parent). Keeps classifier tests off Central. -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>test-jar</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
