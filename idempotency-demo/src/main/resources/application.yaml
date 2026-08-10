@@ -37,6 +37,9 @@ idempotency:
   persistence:
     enabled: true
     table-name: idempotency_records
-    ttl: 24h
+    ttl: 365d
+    lookup-before-acquire: false
     schema:
       mode: create
+    cleanup:
+      enabled: false

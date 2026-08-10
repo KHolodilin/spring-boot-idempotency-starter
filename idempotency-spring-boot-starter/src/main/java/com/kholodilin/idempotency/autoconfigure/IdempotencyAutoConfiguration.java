@@ -73,6 +73,7 @@ public class IdempotencyAutoConfiguration {
                 .distributedCache(distributedCache.getIfAvailable())
                 .metrics(metrics.getIfAvailable(() -> IdempotencyMetrics.NOOP))
                 .persistenceTtl(properties.getPersistence().getTtl())
+                .lookupBeforeAcquire(properties.getPersistence().isLookupBeforeAcquire())
                 .build();
     }
 }

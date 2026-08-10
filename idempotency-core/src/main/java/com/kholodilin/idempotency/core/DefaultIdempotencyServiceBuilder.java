@@ -38,6 +38,8 @@ public final class DefaultIdempotencyServiceBuilder {
 
     boolean requireActiveTransaction = true;
 
+    boolean lookupBeforeAcquire = false;
+
     TransactionContext transactionContext = TransactionContext.IMMEDIATE;
 
     public DefaultIdempotencyServiceBuilder(PersistenceStore persistenceStore) {
@@ -75,7 +77,8 @@ public final class DefaultIdempotencyServiceBuilder {
     }
 
     /**
-     * How long a stored outcome stays replayable. {@code null} means no expiration.
+     * Marker written to {@code expires_at} for physical cleanup jobs. {@code null} means
+     * the row is never cleaned up by TTL. Does not affect request-path visibility.
      */
     public DefaultIdempotencyServiceBuilder persistenceTtl(@Nullable Duration persistenceTtl) {
         this.persistenceTtl = persistenceTtl;
@@ -88,6 +91,15 @@ public final class DefaultIdempotencyServiceBuilder {
      */
     public DefaultIdempotencyServiceBuilder requireActiveTransaction(boolean requireActiveTransaction) {
         this.requireActiveTransaction = requireActiveTransaction;
+        return this;
+    }
+
+    /**
+     * When {@code true}, persistence is queried before {@code acquire} on a cache miss
+     * (better cold-duplicate latency). Default {@code false}: insert-first.
+     */
+    public DefaultIdempotencyServiceBuilder lookupBeforeAcquire(boolean lookupBeforeAcquire) {
+        this.lookupBeforeAcquire = lookupBeforeAcquire;
         return this;
     }
 

@@ -115,11 +115,20 @@ public class IdempotencyProperties {
         private String tableName = "idempotency_records";
 
         /**
-         * How long a stored outcome stays replayable. Empty means no expiration.
+         * Marker written to {@code expires_at} for physical cleanup. Does not affect
+         * request-path visibility. Empty means the row is never cleaned up by TTL.
          */
-        private Duration ttl = Duration.ofHours(24);
+        private Duration ttl = Duration.ofDays(365);
+
+        /**
+         * When {@code true}, persistence is queried before {@code acquire} on a cache
+         * miss (better cold-duplicate latency). Default {@code false}: insert-first.
+         */
+        private boolean lookupBeforeAcquire = false;
 
         private final Schema schema = new Schema();
+
+        private final Cleanup cleanup = new Cleanup();
 
         @Getter
         @Setter
@@ -130,6 +139,26 @@ public class IdempotencyProperties {
              * validate (fail fast if the table is missing or incompatible) or none.
              */
             private SchemaMode mode = SchemaMode.VALIDATE;
+        }
+
+        @Getter
+        @Setter
+        public static class Cleanup {
+
+            /**
+             * Enable the scheduled physical DELETE of expired persistence rows.
+             */
+            private boolean enabled = false;
+
+            /**
+             * Cron expression for the cleanup job (Spring 6-field format).
+             */
+            private String cron = "0 0 3 * * SAT,SUN";
+
+            /**
+             * Maximum rows deleted per batch iteration.
+             */
+            private int batchSize = 1000;
         }
     }
 }

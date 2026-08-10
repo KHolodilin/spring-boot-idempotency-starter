@@ -30,10 +30,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * Default {@link IdempotencyService} implementation.
  *
- * <p>Lookup order: local cache (if configured) → distributed cache (if configured) →
- * persistence (source of truth). Freshly persisted outcomes are pushed to the cache
- * layers only after the surrounding transaction commits, so caches never contain
- * uncommitted state.
+ * <p>Lookup order: local cache (if configured) → distributed cache (if configured).
+ * On a cache miss the service either optionally checks persistence or goes straight to
+ * {@code INSERT ... ON CONFLICT DO NOTHING}. Fresh outcomes are pushed to the cache
+ * layers only after the surrounding transaction commits.
  */
 public final class DefaultIdempotencyService implements IdempotencyService {
 
@@ -52,6 +52,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     private final Clock clock;
     private final @Nullable Duration persistenceTtl;
     private final boolean requireActiveTransaction;
+    private final boolean lookupBeforeAcquire;
     private final TransactionContext transactionContext;
 
     DefaultIdempotencyService(DefaultIdempotencyServiceBuilder builder) {
@@ -64,6 +65,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         this.clock = builder.clock;
         this.persistenceTtl = builder.persistenceTtl;
         this.requireActiveTransaction = builder.requireActiveTransaction;
+        this.lookupBeforeAcquire = builder.lookupBeforeAcquire;
         this.transactionContext = builder.transactionContext;
     }
 
@@ -84,22 +86,36 @@ public final class DefaultIdempotencyService implements IdempotencyService {
 
         String fingerprint = fingerprintStrategy.calculate(request);
 
-        IdempotencyRecord existing = lookup(key);
-        if (existing != null) {
-            return replay(existing, fingerprint, resultType);
+        IdempotencyRecord cached = lookupCaches(key);
+        if (cached != null) {
+            return replay(cached, fingerprint, resultType);
+        }
+
+        if (lookupBeforeAcquire) {
+            IdempotencyRecord existing = persistenceStore.find(key).orElse(null);
+            if (existing != null && isUsable(existing)) {
+                metrics.lookupHit(LEVEL_PERSISTENCE);
+                promote(existing);
+                return replay(existing, fingerprint, resultType);
+            }
         }
 
         for (int attempt = 0; attempt < MAX_ACQUIRE_ATTEMPTS; attempt++) {
             Instant createdAt = clock.instant();
             Instant expiresAt = persistenceTtl == null ? null : createdAt.plus(persistenceTtl);
 
-            // With the JDBC/PostgreSQL store a concurrent duplicate blocks here on the
-            // primary-key index until the first transaction commits or rolls back.
-            if (persistenceStore.acquire(key, fingerprint, createdAt, expiresAt)) {
+            // Concurrent duplicate blocks here on the primary-key index until the first
+            // transaction commits or rolls back.
+            Instant acquireStarted = clock.instant();
+            boolean acquired = persistenceStore.acquire(key, fingerprint, createdAt, expiresAt);
+            metrics.acquireWait(Duration.between(acquireStarted, clock.instant()));
+
+            if (acquired) {
                 metrics.acquired();
                 return runAction(key, fingerprint, createdAt, expiresAt, resultType, action);
             }
 
+            metrics.acquireConflict();
             Optional<IdempotencyRecord> found = persistenceStore.find(key);
             if (found.isPresent() && isUsable(found.get())) {
                 IdempotencyRecord record = found.get();
@@ -107,7 +123,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                 promote(record);
                 return replay(record, fingerprint, resultType);
             }
-            // The concurrent holder rolled back or the record expired — try to acquire again.
+            // The concurrent holder rolled back — try to acquire again.
         }
         throw new IllegalStateException(
                 "Could not acquire idempotency record for %s after %d attempts".formatted(key, MAX_ACQUIRE_ATTEMPTS));
@@ -155,7 +171,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
         return outcome;
     }
 
-    private @Nullable IdempotencyRecord lookup(IdempotencyKey key) {
+    private @Nullable IdempotencyRecord lookupCaches(IdempotencyKey key) {
         if (localCache != null) {
             IdempotencyRecord hit = readCache(key, localCache::get, localCache::evict, LEVEL_LOCAL);
             if (hit != null) {
@@ -170,12 +186,6 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                 }
                 return hit;
             }
-        }
-        IdempotencyRecord record = persistenceStore.find(key).orElse(null);
-        if (record != null && isUsable(record)) {
-            metrics.lookupHit(LEVEL_PERSISTENCE);
-            promote(record);
-            return record;
         }
         return null;
     }
@@ -216,7 +226,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     }
 
     private boolean isUsable(IdempotencyRecord record) {
-        return record.status().isTerminal() && !record.isExpired(clock.instant());
+        return record.status().isTerminal();
     }
 
     /**

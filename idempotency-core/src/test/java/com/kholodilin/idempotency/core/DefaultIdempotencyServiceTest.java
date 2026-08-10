@@ -18,9 +18,11 @@ import com.kholodilin.idempotency.exception.MissingTransactionException;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.spi.PersistenceStore;
 import com.kholodilin.idempotency.spi.TransactionContext;
 import com.kholodilin.idempotency.testsupport.InMemoryCache;
+import com.kholodilin.idempotency.testsupport.InMemoryPersistenceCleanup;
 import com.kholodilin.idempotency.testsupport.InMemoryStore;
 import org.junit.jupiter.api.Test;
 
@@ -238,7 +240,7 @@ class DefaultIdempotencyServiceTest {
     }
 
     @Test
-    void persistenceHitIsPromotedToBothCaches() {
+    void persistenceHitAfterAcquireConflictIsPromotedToBothCaches() {
         DefaultIdempotencyService service =
                 serviceBuilder().localCache(local).distributedCache(distributed).build();
         IdempotencyRecord record = completedRecord();
@@ -247,8 +249,36 @@ class DefaultIdempotencyServiceTest {
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
+        assertThat(store.acquireCalls).hasValue(1);
+        assertThat(store.findCalls).hasValue(1);
         assertThat(local.data).containsEntry(record.key(), record);
         assertThat(distributed.data).containsEntry(record.key(), record);
+    }
+
+    @Test
+    void insertFirstSkipsPersistenceFindOnCacheMiss() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(store.acquireCalls).hasValue(1);
+        assertThat(store.findCalls)
+                .as("default insert-first must not find before acquire")
+                .hasValue(0);
+    }
+
+    @Test
+    void lookupBeforeAcquireReplaysTerminalWithoutAcquire() {
+        IdempotencyRecord record = completedRecord();
+        store.data.put(record.key(), record);
+        DefaultIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(store.findCalls).hasValue(1);
+        assertThat(store.acquireCalls).hasValue(0);
     }
 
     @Test
@@ -262,26 +292,54 @@ class DefaultIdempotencyServiceTest {
     }
 
     @Test
-    void expiredCacheEntryIsEvictedAndOperationExecutesAgain() {
+    void expiredTerminalCacheEntryIsStillReplayed() {
         DefaultIdempotencyService service = serviceBuilder().localCache(local).build();
-        IdempotencyRecord expired = completedRecord()
-                .completed(PaymentResult.class.getName(), "{\"paymentId\":\"old\"}", NOW.minusSeconds(7200));
-        expired = new IdempotencyRecord(
-                expired.key(),
-                expired.status(),
-                expired.requestHash(),
-                expired.resultType(),
-                expired.resultPayload(),
+        IdempotencyRecord base = completedRecord();
+        IdempotencyRecord expired = new IdempotencyRecord(
+                base.key(),
+                IdempotencyStatus.COMPLETED,
+                base.requestHash(),
+                PaymentResult.class.getName(),
+                "{\"paymentId\":\"pay-42\"}",
                 null,
                 NOW.minusSeconds(7200),
                 NOW.minusSeconds(7200),
                 NOW.minusSeconds(3600));
         local.data.put(expired.key(), expired);
 
+        ExecutionResult<PaymentResult> result =
+                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(local.evicts).hasValue(0);
+        assertThat(store.acquireCalls).hasValue(0);
+    }
+
+    @Test
+    void physicalCleanupAllowsNewAcquire() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(1)).build();
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        assertThat(actionCalls).hasValue(1);
+
+        new InMemoryPersistenceCleanup(store).deleteExpired(NOW.plus(Duration.ofHours(2)), 100);
+
+        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        assertThat(actionCalls).hasValue(2);
+    }
+
+    @Test
+    void acquireConflictAndWaitAreRecorded() {
+        IdempotencyMetrics metrics = mock(IdempotencyMetrics.class);
+        IdempotencyRecord record = completedRecord();
+        store.data.put(record.key(), record);
+        DefaultIdempotencyService service = serviceBuilder().metrics(metrics).build();
+
         service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
 
-        assertThat(actionCalls).hasValue(1);
-        assertThat(local.evicts).hasValue(1);
+        verify(metrics).acquireConflict();
+        verify(metrics).acquireWait(any(Duration.class));
     }
 
     @Test
@@ -349,9 +407,7 @@ class DefaultIdempotencyServiceTest {
     void lostAcquireRaceReplaysRecordCommittedByConcurrentRequest() {
         PersistenceStore racingStore = mock(PersistenceStore.class);
         IdempotencyRecord committedByOther = completedRecord();
-        when(racingStore.find(any()))
-                .thenReturn(Optional.empty()) // initial lookup
-                .thenReturn(Optional.of(committedByOther)); // after lost acquire
+        when(racingStore.find(any())).thenReturn(Optional.of(committedByOther));
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
@@ -364,6 +420,7 @@ class DefaultIdempotencyServiceTest {
 
         assertThat(actionCalls).hasValue(0);
         assertThat(((Success<PaymentResult>) result).value()).isEqualTo(new PaymentResult("pay-42"));
+        verify(racingStore, times(1)).find(any());
     }
 
     @Test

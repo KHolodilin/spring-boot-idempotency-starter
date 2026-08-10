@@ -9,14 +9,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
+import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.spi.PersistenceStore;
 import org.jspecify.annotations.Nullable;
 
 /**
  * In-memory {@link PersistenceStore} for unit and integration tests.
  *
- * <p>When a {@link Clock} is provided, expired records are treated as absent on
- * {@link #find} / {@link #acquire}. Methods are synchronized for concurrent tests.
+ * <p>Rows remain visible until physically removed (no TTL filter on find/acquire).
+ * Methods are synchronized for concurrent tests.
  */
 public final class InMemoryStore implements PersistenceStore {
 
@@ -24,27 +25,24 @@ public final class InMemoryStore implements PersistenceStore {
     public final AtomicInteger findCalls = new AtomicInteger();
     public final AtomicInteger acquireCalls = new AtomicInteger();
 
-    private final @Nullable Clock clock;
+    public InMemoryStore() {}
 
-    public InMemoryStore() {
-        this(null);
-    }
-
-    public InMemoryStore(@Nullable Clock clock) {
-        this.clock = clock;
-    }
+    /**
+     * @param clock ignored; retained for call-site compatibility
+     */
+    public InMemoryStore(@Nullable Clock clock) {}
 
     @Override
     public synchronized Optional<IdempotencyRecord> find(IdempotencyKey key) {
         findCalls.incrementAndGet();
-        return Optional.ofNullable(usable(data.get(key)));
+        return Optional.ofNullable(data.get(key));
     }
 
     @Override
     public synchronized boolean acquire(
             IdempotencyKey key, String requestHash, Instant createdAt, @Nullable Instant expiresAt) {
         acquireCalls.incrementAndGet();
-        if (usable(data.get(key)) != null) {
+        if (data.containsKey(key)) {
             return false;
         }
         data.put(key, IdempotencyRecord.processing(key, requestHash, createdAt, expiresAt));
@@ -54,22 +52,22 @@ public final class InMemoryStore implements PersistenceStore {
     @Override
     public synchronized void complete(
             IdempotencyKey key, @Nullable String resultType, @Nullable String resultPayload, Instant completedAt) {
-        data.compute(key, (k, r) -> r.completed(resultType, resultPayload, completedAt));
+        IdempotencyRecord current = data.get(key);
+        if (current == null || current.status() != IdempotencyStatus.PROCESSING) {
+            throw new IllegalStateException(
+                    "Idempotency complete for %s affected 0 rows, expected exactly 1".formatted(key));
+        }
+        data.put(key, current.completed(resultType, resultPayload, completedAt));
     }
 
     @Override
     public synchronized void reject(
             IdempotencyKey key, String errorCode, @Nullable String detailsPayload, Instant completedAt) {
-        data.compute(key, (k, r) -> r.rejected(errorCode, detailsPayload, completedAt));
-    }
-
-    private @Nullable IdempotencyRecord usable(@Nullable IdempotencyRecord record) {
-        if (record == null) {
-            return null;
+        IdempotencyRecord current = data.get(key);
+        if (current == null || current.status() != IdempotencyStatus.PROCESSING) {
+            throw new IllegalStateException(
+                    "Idempotency reject for %s affected 0 rows, expected exactly 1".formatted(key));
         }
-        if (clock != null && record.isExpired(clock.instant())) {
-            return null;
-        }
-        return record;
+        data.put(key, current.rejected(errorCode, detailsPayload, completedAt));
     }
 }
