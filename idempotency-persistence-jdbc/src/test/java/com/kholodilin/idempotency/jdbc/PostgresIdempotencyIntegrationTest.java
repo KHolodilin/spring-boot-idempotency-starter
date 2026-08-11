@@ -211,14 +211,18 @@ class PostgresIdempotencyIntegrationTest {
 
     @Test
     void completedOutcomeIsPersistedAndReplayed() {
-        ExecutionResult<PaymentResult> first =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "abc-123", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> first = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("abc-123")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     actionCalls.incrementAndGet();
                     return ExecutionResult.success(new PaymentResult("pay-42"));
                 }));
 
-        ExecutionResult<PaymentResult> replayed =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "abc-123", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> replayed = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("abc-123")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     throw new AssertionError("action must not run on replay");
                 }));
 
@@ -231,15 +235,17 @@ class PostgresIdempotencyIntegrationTest {
     void rejectedOutcomeIsPersistedAndReplayedIdentically() {
         record Details(long amount, long balance) {}
 
-        ExecutionResult<PaymentResult> first = tx.execute(status -> service.execute(
-                "CREATE_PAYMENT",
-                "rej-1",
-                command,
-                PaymentResult.class,
-                () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200))));
+        ExecutionResult<PaymentResult> first = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("rej-1")
+                .request(command)
+                .execute(
+                        PaymentResult.class,
+                        () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200))));
 
-        ExecutionResult<PaymentResult> replayed =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "rej-1", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> replayed = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("rej-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     throw new AssertionError("action must not run on replay");
                 }));
 
@@ -256,8 +262,10 @@ class PostgresIdempotencyIntegrationTest {
 
     @Test
     void technicalFailureRollsBackAndLeavesNoCommittedRecord() {
-        assertThatThrownBy(() -> tx.executeWithoutResult(
-                        status -> service.execute("CREATE_PAYMENT", "fail-1", command, PaymentResult.class, () -> {
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> service.operation("CREATE_PAYMENT")
+                        .key("fail-1")
+                        .request(command)
+                        .execute(PaymentResult.class, () -> {
                             actionCalls.incrementAndGet();
                             throw new IllegalStateException("connection reset");
                         })))
@@ -269,8 +277,10 @@ class PostgresIdempotencyIntegrationTest {
                 .isEmpty();
 
         // retry executes the operation from scratch
-        ExecutionResult<PaymentResult> retried =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "fail-1", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> retried = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("fail-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     actionCalls.incrementAndGet();
                     return ExecutionResult.success(new PaymentResult("pay-2nd"));
                 }));
@@ -281,21 +291,17 @@ class PostgresIdempotencyIntegrationTest {
 
     @Test
     void sameKeyWithDifferentPayloadConflicts() {
-        tx.executeWithoutResult(status -> service.execute(
-                "CREATE_PAYMENT",
-                "conf-1",
-                command,
-                PaymentResult.class,
-                () -> ExecutionResult.success(new PaymentResult("pay-42"))));
+        tx.executeWithoutResult(status -> service.operation("CREATE_PAYMENT")
+                .key("conf-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> ExecutionResult.success(new PaymentResult("pay-42"))));
 
         Command different = new Command("o-1", new BigDecimal("999.99"));
 
-        assertThatThrownBy(() -> tx.executeWithoutResult(status -> service.execute(
-                        "CREATE_PAYMENT",
-                        "conf-1",
-                        different,
-                        PaymentResult.class,
-                        () -> ExecutionResult.success(new PaymentResult("pay-43")))))
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> service.operation("CREATE_PAYMENT")
+                        .key("conf-1")
+                        .request(different)
+                        .execute(PaymentResult.class, () -> ExecutionResult.success(new PaymentResult("pay-43")))))
                 .isInstanceOf(IdempotencyConflictException.class);
     }
 
@@ -304,16 +310,20 @@ class PostgresIdempotencyIntegrationTest {
         JdbcIdempotencyPersistenceCleanup cleanup =
                 new JdbcIdempotencyPersistenceCleanup(dataSource, "idempotency_records");
 
-        tx.executeWithoutResult(
-                status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
+        tx.executeWithoutResult(status -> service.operation("CREATE_PAYMENT")
+                .key("ttl-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     actionCalls.incrementAndGet();
                     return ExecutionResult.success(new PaymentResult("pay-old"));
                 }));
 
         clock.advance(Duration.ofHours(25));
 
-        ExecutionResult<PaymentResult> replayed =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> replayed = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("ttl-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     throw new AssertionError("action must not run while the row exists");
                 }));
         assertThat(actionCalls).hasValue(1);
@@ -321,8 +331,10 @@ class PostgresIdempotencyIntegrationTest {
 
         tx.executeWithoutResult(status -> cleanup.deleteExpired(clock.instant(), 100));
 
-        ExecutionResult<PaymentResult> second =
-                tx.execute(status -> service.execute("CREATE_PAYMENT", "ttl-1", command, PaymentResult.class, () -> {
+        ExecutionResult<PaymentResult> second = tx.execute(status -> service.operation("CREATE_PAYMENT")
+                .key("ttl-1")
+                .request(command)
+                .execute(PaymentResult.class, () -> {
                     actionCalls.incrementAndGet();
                     return ExecutionResult.success(new PaymentResult("pay-new"));
                 }));
@@ -336,8 +348,10 @@ class PostgresIdempotencyIntegrationTest {
         Command payload = new Command("o-9", new BigDecimal("50.00"));
 
         CompletableFuture<ExecutionResult<PaymentResult>> first = CompletableFuture.supplyAsync(
-                () -> tx.execute(
-                        status -> service.execute("CREATE_PAYMENT", "race-1", payload, PaymentResult.class, () -> {
+                () -> tx.execute(status -> service.operation("CREATE_PAYMENT")
+                        .key("race-1")
+                        .request(payload)
+                        .execute(PaymentResult.class, () -> {
                             actionCalls.incrementAndGet();
                             sleep(700); // hold the transaction so the duplicate blocks on the PK index
                             return ExecutionResult.success(new PaymentResult("pay-winner"));
@@ -347,8 +361,10 @@ class PostgresIdempotencyIntegrationTest {
         Thread.sleep(200); // let the first request acquire the key
 
         CompletableFuture<ExecutionResult<PaymentResult>> second = CompletableFuture.supplyAsync(
-                () -> tx.execute(
-                        status -> service.execute("CREATE_PAYMENT", "race-1", payload, PaymentResult.class, () -> {
+                () -> tx.execute(status -> service.operation("CREATE_PAYMENT")
+                        .key("race-1")
+                        .request(payload)
+                        .execute(PaymentResult.class, () -> {
                             actionCalls.incrementAndGet();
                             return ExecutionResult.success(new PaymentResult("pay-loser"));
                         })),

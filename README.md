@@ -38,7 +38,7 @@ flowchart LR
     I --> A["business action<br/>Supplier&lt;ExecutionResult&gt;"]
 ```
 
-Execution flow of `execute(...)`:
+Execution flow of `operation(...).execute(...)`:
 
 1. The request fingerprint is calculated (canonical JSON + SHA-256).
 2. Cache lookup: L1 → L2 (a hit in L2 is promoted to L1).
@@ -56,7 +56,8 @@ Execution flow of `execute(...)`:
 8. After the commit (and only then) the outcome is written to Redis and Caffeine.
 
 Rows remain replayable until physically deleted. `expires_at` is only a cleanup marker
-(written from `persistence.ttl`); it is not consulted on the request path.
+(from `persistence.ttl`, or a per-call `.ttl(...)` override on acquire); it is not
+consulted on the request path.
 
 ## Quick start
 
@@ -66,32 +67,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0-SNAPSHOT</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0-SNAPSHOT</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.2.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.3.0-SNAPSHOT")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.2.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.2.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.3.0-SNAPSHOT")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.3.0-SNAPSHOT")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -108,15 +109,21 @@ public class PaymentService {
 
     @Transactional
     public ExecutionResult<PaymentResult> createPayment(String key, CreatePaymentRequest request) {
-        return idempotencyService.execute("CREATE_PAYMENT", key, request, PaymentResult.class, () -> {
-            if (request.amount().compareTo(balance) > 0) {
-                // deterministic business rejection: persisted and replayed on duplicates
-                return ExecutionResult.rejected("INSUFFICIENT_FUNDS",
-                        new InsufficientFundsDetails(request.amount(), balance));
-            }
-            paymentRepository.insert(...);          // business changes in the same transaction
-            return ExecutionResult.success(new PaymentResult(...));
-        });
+        return idempotencyService
+                .operation("CREATE_PAYMENT")
+                .key(key)
+                .request(request)
+                // optional: override persistence.ttl for this acquire only
+                // .ttl(Duration.ofDays(30))
+                .execute(PaymentResult.class, () -> {
+                    if (request.amount().compareTo(balance) > 0) {
+                        // deterministic business rejection: persisted and replayed on duplicates
+                        return ExecutionResult.rejected("INSUFFICIENT_FUNDS",
+                                new InsufficientFundsDetails(request.amount(), balance));
+                    }
+                    paymentRepository.insert(...); // business changes in the same transaction
+                    return ExecutionResult.success(new PaymentResult(...));
+                });
     }
 }
 ```
@@ -189,7 +196,7 @@ idempotency:
   persistence:
     enabled: true
     table-name: idempotency_records    # may be schema-qualified: billing.idempotency_records
-    ttl: 365d                          # expires_at marker for cleanup (always set from properties)
+    ttl: 365d                          # default expires_at marker; override per call with .ttl(...)
     lookup-before-acquire: false       # true = DB find before INSERT (better cold-duplicate latency)
     schema:
       mode: validate                   # create | validate | none

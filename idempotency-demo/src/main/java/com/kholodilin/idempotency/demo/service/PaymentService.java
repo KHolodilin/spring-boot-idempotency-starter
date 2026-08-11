@@ -37,12 +37,11 @@ public class PaymentService {
 
     @Transactional
     public ExecutionResult<PaymentResult> createPayment(String idempotencyKey, CreatePaymentRequest request) {
-        return idempotencyService.execute(
-                "CREATE_PAYMENT",
-                idempotencyKey,
-                request,
-                PaymentResult.class,
-                () -> doCreatePayment(idempotencyKey, request));
+        return idempotencyService
+                .operation("CREATE_PAYMENT")
+                .key(idempotencyKey)
+                .request(request)
+                .execute(PaymentResult.class, () -> doCreatePayment(idempotencyKey, request));
     }
 
     private ExecutionResult<PaymentResult> doCreatePayment(String idempotencyKey, CreatePaymentRequest request) {
@@ -62,12 +61,16 @@ public class PaymentService {
 
     @Transactional
     public ExecutionResult<RefundResult> refund(String idempotencyKey, RefundRequest request) {
-        return idempotencyService.execute("REFUND_PAYMENT", idempotencyKey, request, RefundResult.class, () -> {
-            if (request.amount().compareTo(REFUND_LIMIT) > 0) {
-                return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request);
-            }
-            return ExecutionResult.success(
-                    new RefundResult(UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED"));
-        });
+        return idempotencyService
+                .operation("REFUND_PAYMENT")
+                .key(idempotencyKey)
+                .request(request)
+                .execute(RefundResult.class, () -> {
+                    if (request.amount().compareTo(REFUND_LIMIT) > 0) {
+                        return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request);
+                    }
+                    return ExecutionResult.success(new RefundResult(
+                            UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED"));
+                });
     }
 }
