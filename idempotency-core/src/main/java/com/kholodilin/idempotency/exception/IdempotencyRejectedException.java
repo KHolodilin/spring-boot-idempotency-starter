@@ -11,7 +11,7 @@ import tools.jackson.databind.JsonNode;
  * rejection. Intended to be handled once per application, e.g. by a
  * {@code @RestControllerAdvice} that maps it to an HTTP error response.
  *
- * <p>Never thrown by {@link IdempotencyService#execute} itself: inside the transaction a
+ * <p>Never thrown by {@link IdempotencyService} itself: inside the transaction a
  * rejection is a regular return value. Call {@code valueOrThrow()} only outside the
  * transactional method (typically in a controller), otherwise the transaction that has
  * just persisted the REJECTED outcome would be marked rollback-only.

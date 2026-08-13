@@ -87,7 +87,7 @@ class RedisCacheAsideIntegrationTest {
         CaffeineLocalCache caffeine = new CaffeineLocalCache();
         DefaultIdempotencyService service = service(caffeine, redisCache);
 
-        service.execute("CREATE_PAYMENT", "fresh-1", "req", PaymentResult.class, this::action);
+        service.operation("CREATE_PAYMENT").key("fresh-1").request("req").execute(PaymentResult.class, this::action);
 
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "fresh-1");
         assertThat(redisCache.get(key)).map(IdempotencyRecord::status).contains(IdempotencyStatus.COMPLETED);
@@ -98,13 +98,19 @@ class RedisCacheAsideIntegrationTest {
     void redisHitIsPromotedToCaffeineWithoutTouchingPersistence() {
         // first instance of the application populates Redis
         service(new CaffeineLocalCache(), redisCache)
-                .execute("CREATE_PAYMENT", "promo-1", "req", PaymentResult.class, this::action);
+                .operation("CREATE_PAYMENT")
+                .key("promo-1")
+                .request("req")
+                .execute(PaymentResult.class, this::action);
         int findsAfterFirstExecution = store.findCalls.get();
 
         // second instance: empty Caffeine, shared Redis
         CaffeineLocalCache freshCaffeine = new CaffeineLocalCache();
         ExecutionResult<PaymentResult> replayed = service(freshCaffeine, redisCache)
-                .execute("CREATE_PAYMENT", "promo-1", "req", PaymentResult.class, this::action);
+                .operation("CREATE_PAYMENT")
+                .key("promo-1")
+                .request("req")
+                .execute(PaymentResult.class, this::action);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(replayed.isSuccess()).isTrue();
@@ -120,11 +126,18 @@ class RedisCacheAsideIntegrationTest {
         DefaultIdempotencyService noCacheService = new DefaultIdempotencyServiceBuilder(store)
                 .requireActiveTransaction(false)
                 .build();
-        noCacheService.execute("CREATE_PAYMENT", "cold-1", "req", PaymentResult.class, this::action);
+        noCacheService
+                .operation("CREATE_PAYMENT")
+                .key("cold-1")
+                .request("req")
+                .execute(PaymentResult.class, this::action);
 
         CaffeineLocalCache caffeine = new CaffeineLocalCache();
         ExecutionResult<PaymentResult> replayed = service(caffeine, redisCache)
-                .execute("CREATE_PAYMENT", "cold-1", "req", PaymentResult.class, this::action);
+                .operation("CREATE_PAYMENT")
+                .key("cold-1")
+                .request("req")
+                .execute(PaymentResult.class, this::action);
 
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "cold-1");
         assertThat(actionCalls).hasValue(1);
@@ -155,10 +168,15 @@ class RedisCacheAsideIntegrationTest {
                     new RedisDistributedCache(dead, "dead:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
             DefaultIdempotencyService service = service(new CaffeineLocalCache(), deadCache);
 
-            ExecutionResult<PaymentResult> first =
-                    service.execute("CREATE_PAYMENT", "dead-ca-1", "req", PaymentResult.class, this::action);
+            ExecutionResult<PaymentResult> first = service.operation("CREATE_PAYMENT")
+                    .key("dead-ca-1")
+                    .request("req")
+                    .execute(PaymentResult.class, this::action);
             ExecutionResult<PaymentResult> replayed = service(new CaffeineLocalCache(), deadCache)
-                    .execute("CREATE_PAYMENT", "dead-ca-1", "req", PaymentResult.class, this::action);
+                    .operation("CREATE_PAYMENT")
+                    .key("dead-ca-1")
+                    .request("req")
+                    .execute(PaymentResult.class, this::action);
 
             assertThat(actionCalls)
                     .as("first executes, second replays from persistence")

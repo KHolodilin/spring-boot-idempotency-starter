@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
+import com.kholodilin.idempotency.IdempotencyCall;
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
@@ -70,12 +71,18 @@ public final class DefaultIdempotencyService implements IdempotencyService {
     }
 
     @Override
-    public <RQ, RS> ExecutionResult<RS> execute(
+    public IdempotencyCall operation(String operation) {
+        return new Call(operation);
+    }
+
+    <RQ, RS> ExecutionResult<RS> executeInternal(
             String operation,
             String idempotencyKey,
             @Nullable RQ request,
             Class<RS> resultType,
-            Supplier<ExecutionResult<RS>> action) {
+            Supplier<ExecutionResult<RS>> action,
+            boolean ttlSet,
+            @Nullable Duration ttlOverride) {
         Objects.requireNonNull(resultType, "resultType");
         Objects.requireNonNull(action, "action");
         IdempotencyKey key = new IdempotencyKey(operation, idempotencyKey);
@@ -100,9 +107,11 @@ public final class DefaultIdempotencyService implements IdempotencyService {
             }
         }
 
+        Duration effectiveTtl = ttlSet ? ttlOverride : persistenceTtl;
+
         for (int attempt = 0; attempt < MAX_ACQUIRE_ATTEMPTS; attempt++) {
             Instant createdAt = clock.instant();
-            Instant expiresAt = persistenceTtl == null ? null : createdAt.plus(persistenceTtl);
+            Instant expiresAt = effectiveTtl == null ? null : createdAt.plus(effectiveTtl);
 
             // Concurrent duplicate blocks here on the primary-key index until the first
             // transaction commits or rolls back.
@@ -250,5 +259,51 @@ public final class DefaultIdempotencyService implements IdempotencyService {
             return;
         }
         transactionContext.afterCommit(() -> promote(record));
+    }
+
+    private final class Call implements IdempotencyCall {
+
+        private final String operation;
+        private @Nullable String idempotencyKey;
+        private @Nullable Object request;
+        private boolean ttlSet;
+        private @Nullable Duration ttl;
+
+        private Call(String operation) {
+            if (operation == null || operation.isBlank()) {
+                throw new IllegalArgumentException("operation must not be blank");
+            }
+            this.operation = operation;
+        }
+
+        @Override
+        public IdempotencyCall key(String idempotencyKey) {
+            if (idempotencyKey == null || idempotencyKey.isBlank()) {
+                throw new IllegalArgumentException("idempotencyKey must not be blank");
+            }
+            this.idempotencyKey = idempotencyKey;
+            return this;
+        }
+
+        @Override
+        public <RQ> IdempotencyCall request(@Nullable RQ request) {
+            this.request = request;
+            return this;
+        }
+
+        @Override
+        public IdempotencyCall ttl(@Nullable Duration ttl) {
+            this.ttlSet = true;
+            this.ttl = ttl;
+            return this;
+        }
+
+        @Override
+        public <RS> ExecutionResult<RS> execute(Class<RS> resultType, Supplier<ExecutionResult<RS>> action) {
+            if (idempotencyKey == null) {
+                throw new IllegalStateException("idempotency key must be set via key(...) before execute(...)");
+            }
+            return executeInternal(operation, idempotencyKey, request, resultType, action, ttlSet, ttl);
+        }
     }
 }

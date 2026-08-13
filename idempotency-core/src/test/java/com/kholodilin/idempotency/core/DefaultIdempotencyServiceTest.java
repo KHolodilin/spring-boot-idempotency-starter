@@ -67,8 +67,10 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(result).isEqualTo(ExecutionResult.success(new PaymentResult("pay-42")));
@@ -84,10 +86,14 @@ class DefaultIdempotencyServiceTest {
     void duplicateRequestReplaysCompletedWithoutExecutingAction() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<PaymentResult> first =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
-        ExecutionResult<PaymentResult> second =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> first = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> second = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(second).isEqualTo(first);
@@ -97,16 +103,19 @@ class DefaultIdempotencyServiceTest {
     void rejectedOutcomeIsPersistedAndReplayedIdentically() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<PaymentResult> first = service.execute(
-                OPERATION,
-                KEY,
-                command,
-                PaymentResult.class,
-                () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200)));
+        ExecutionResult<PaymentResult> first = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(
+                        PaymentResult.class,
+                        () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200)));
 
-        ExecutionResult<PaymentResult> replayed = service.execute(OPERATION, KEY, command, PaymentResult.class, () -> {
-            throw new AssertionError("action must not run on replay");
-        });
+        ExecutionResult<PaymentResult> replayed = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, () -> {
+                    throw new AssertionError("action must not run on replay");
+                });
 
         assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).status()).isEqualTo(IdempotencyStatus.REJECTED);
         Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
@@ -119,12 +128,14 @@ class DefaultIdempotencyServiceTest {
     @Test
     void sameKeyWithDifferentPayloadThrowsConflict() {
         DefaultIdempotencyService service = serviceBuilder().build();
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         Command otherPayload = new Command("o-1", new BigDecimal("999.00"));
 
-        assertThatThrownBy(
-                        () -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(otherPayload)
+                        .execute(PaymentResult.class, this::countingAction))
                 .isInstanceOf(IdempotencyConflictException.class);
         assertThat(actionCalls).hasValue(1);
     }
@@ -133,8 +144,8 @@ class DefaultIdempotencyServiceTest {
     void sameKeyForDifferentOperationsAreIndependentRecords() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        service.execute("CREATE_ORDER", KEY, command, PaymentResult.class, this::countingAction);
-        service.execute("CANCEL_ORDER", KEY, command, PaymentResult.class, this::countingAction);
+        service.operation("CREATE_ORDER").key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
+        service.operation("CANCEL_ORDER").key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(2);
         assertThat(store.data)
@@ -146,9 +157,12 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().localCache(local).distributedCache(distributed).build();
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, () -> {
-                    throw new IllegalStateException("SQL timeout");
-                }))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, () -> {
+                            throw new IllegalStateException("SQL timeout");
+                        }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("SQL timeout");
 
@@ -162,11 +176,16 @@ class DefaultIdempotencyServiceTest {
     void voidResultIsPersistedAndReplayed() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<Void> first =
-                service.execute("PROCESS_EVENT", "evt-1", command, Void.class, () -> ExecutionResult.success(null));
-        ExecutionResult<Void> replayed = service.execute("PROCESS_EVENT", "evt-1", command, Void.class, () -> {
-            throw new AssertionError("action must not run on replay");
-        });
+        ExecutionResult<Void> first = service.operation("PROCESS_EVENT")
+                .key("evt-1")
+                .request(command)
+                .execute(Void.class, () -> ExecutionResult.success(null));
+        ExecutionResult<Void> replayed = service.operation("PROCESS_EVENT")
+                .key("evt-1")
+                .request(command)
+                .execute(Void.class, () -> {
+                    throw new AssertionError("action must not run on replay");
+                });
 
         assertThat(first).isInstanceOf(Success.class);
         assertThat(((Success<Void>) replayed).value()).isNull();
@@ -192,7 +211,10 @@ class DefaultIdempotencyServiceTest {
                 .transactionContext(inactive)
                 .build();
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
                 .isInstanceOf(MissingTransactionException.class);
         assertThat(actionCalls).hasValue(0);
     }
@@ -201,7 +223,8 @@ class DefaultIdempotencyServiceTest {
     void nullActionResultIsRejected() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, () -> null))
+        assertThatThrownBy(() ->
+                        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, () -> null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("ExecutionResult.success(null)");
     }
@@ -215,8 +238,10 @@ class DefaultIdempotencyServiceTest {
         IdempotencyRecord record = completedRecord();
         local.data.put(record.key(), record);
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(result.isSuccess()).isTrue();
@@ -232,7 +257,7 @@ class DefaultIdempotencyServiceTest {
         IdempotencyRecord record = completedRecord();
         distributed.data.put(record.key(), record);
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(local.data).containsEntry(record.key(), record);
@@ -246,7 +271,7 @@ class DefaultIdempotencyServiceTest {
         IdempotencyRecord record = completedRecord();
         store.data.put(record.key(), record);
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(store.acquireCalls).hasValue(1);
@@ -259,7 +284,7 @@ class DefaultIdempotencyServiceTest {
     void insertFirstSkipsPersistenceFindOnCacheMiss() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(store.acquireCalls).hasValue(1);
         assertThat(store.findCalls)
@@ -274,7 +299,7 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().lookupBeforeAcquire(true).build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(store.findCalls).hasValue(1);
@@ -285,8 +310,8 @@ class DefaultIdempotencyServiceTest {
     void worksWithCachesDisabled() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
     }
@@ -307,8 +332,10 @@ class DefaultIdempotencyServiceTest {
                 NOW.minusSeconds(3600));
         local.data.put(expired.key(), expired);
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(result.isSuccess()).isTrue();
@@ -320,12 +347,12 @@ class DefaultIdempotencyServiceTest {
     void physicalCleanupAllowsNewAcquire() {
         DefaultIdempotencyService service =
                 serviceBuilder().persistenceTtl(Duration.ofHours(1)).build();
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
         assertThat(actionCalls).hasValue(1);
 
         new InMemoryPersistenceCleanup(store).deleteExpired(NOW.plus(Duration.ofHours(2)), 100);
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
         assertThat(actionCalls).hasValue(2);
     }
 
@@ -336,7 +363,7 @@ class DefaultIdempotencyServiceTest {
         store.data.put(record.key(), record);
         DefaultIdempotencyService service = serviceBuilder().metrics(metrics).build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         verify(metrics).acquireConflict();
         verify(metrics).acquireWait(any(Duration.class));
@@ -350,8 +377,10 @@ class DefaultIdempotencyServiceTest {
 
         Command otherPayload = new Command("o-2", new BigDecimal("1.00"));
 
-        assertThatThrownBy(
-                        () -> service.execute(OPERATION, KEY, otherPayload, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(otherPayload)
+                        .execute(PaymentResult.class, this::countingAction))
                 .isInstanceOf(IdempotencyConflictException.class);
         assertThat(store.findCalls).hasValue(0);
     }
@@ -361,7 +390,7 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().localCache(local).distributedCache(distributed).build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         IdempotencyKey key = new IdempotencyKey(OPERATION, KEY);
         assertThat(local.data.get(key).status()).isEqualTo(IdempotencyStatus.COMPLETED);
@@ -388,7 +417,7 @@ class DefaultIdempotencyServiceTest {
                 .transactionContext(capturing)
                 .build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(local.data).as("cache must not contain uncommitted state").isEmpty();
         assertThat(distributed.data).isEmpty();
@@ -415,8 +444,10 @@ class DefaultIdempotencyServiceTest {
                 .requireActiveTransaction(false)
                 .build();
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(((Success<PaymentResult>) result).value()).isEqualTo(new PaymentResult("pay-42"));
@@ -436,8 +467,10 @@ class DefaultIdempotencyServiceTest {
                 .requireActiveTransaction(false)
                 .build();
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(result.isSuccess()).isTrue();
@@ -455,7 +488,10 @@ class DefaultIdempotencyServiceTest {
                 .requireActiveTransaction(false)
                 .build();
 
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("after 3 attempts");
         assertThat(actionCalls).hasValue(0);
@@ -469,8 +505,10 @@ class DefaultIdempotencyServiceTest {
                 new IdempotencyKey(OPERATION, KEY), completedRecord().requestHash(), NOW.minusSeconds(1), null);
         local.data.put(processing.key(), processing);
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(result.isSuccess()).isTrue();
@@ -486,7 +524,10 @@ class DefaultIdempotencyServiceTest {
                 serviceBuilder().lookupBeforeAcquire(true).build();
 
         // acquire fails (row present), find returns non-terminal → loop exhausts
-        assertThatThrownBy(() -> service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction))
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("after 3 attempts");
         assertThat(actionCalls).hasValue(0);
@@ -502,7 +543,7 @@ class DefaultIdempotencyServiceTest {
                 .requireActiveTransaction(false)
                 .build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).requestHash())
                 .isEqualTo("fixed-hash");
@@ -525,8 +566,10 @@ class DefaultIdempotencyServiceTest {
                 .requireActiveTransaction(true)
                 .build();
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(actionCalls).hasValue(1);
@@ -536,8 +579,10 @@ class DefaultIdempotencyServiceTest {
     void rejectedWithoutDetailsPersistsNullPayload() {
         DefaultIdempotencyService service = serviceBuilder().build();
 
-        ExecutionResult<PaymentResult> first =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, () -> ExecutionResult.rejected("GONE"));
+        ExecutionResult<PaymentResult> first = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, () -> ExecutionResult.rejected("GONE"));
 
         assertThat(first).isInstanceOf(Rejected.class);
         assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).resultPayload())
@@ -551,8 +596,10 @@ class DefaultIdempotencyServiceTest {
         IdempotencyRecord record = completedRecord();
         distributed.data.put(record.key(), record);
 
-        ExecutionResult<PaymentResult> result =
-                service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(0);
         assertThat(result.isSuccess()).isTrue();
@@ -565,7 +612,7 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().lookupBeforeAcquire(true).build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(actionCalls).hasValue(1);
         assertThat(store.findCalls).hasValue(1);
@@ -577,10 +624,121 @@ class DefaultIdempotencyServiceTest {
         DefaultIdempotencyService service =
                 serviceBuilder().distributedCache(distributed).build();
 
-        service.execute(OPERATION, KEY, command, PaymentResult.class, this::countingAction);
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
 
         assertThat(distributed.data).containsKey(new IdempotencyKey(OPERATION, KEY));
         assertThat(local.data).isEmpty();
+    }
+
+    @Test
+    void perCallTtlOverridesServiceDefault() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
+
+        service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .ttl(Duration.ofMinutes(5))
+                .execute(PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).expiresAt())
+                .isEqualTo(NOW.plus(Duration.ofMinutes(5)));
+    }
+
+    @Test
+    void explicitNullTtlClearsExpiryOnAcquire() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
+
+        service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .ttl(null)
+                .execute(PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).expiresAt())
+                .isNull();
+    }
+
+    @Test
+    void omittedTtlUsesServiceDefault() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(Duration.ofHours(24)).build();
+
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).expiresAt())
+                .isEqualTo(NOW.plus(Duration.ofHours(24)));
+    }
+
+    @Test
+    void executeWithoutKeyFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(OPERATION)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("idempotency key");
+        assertThat(actionCalls).hasValue(0);
+    }
+
+    @Test
+    void blankOperationFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("operation");
+    }
+
+    @Test
+    void nullOperationFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("operation");
+    }
+
+    @Test
+    void blankKeyFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(OPERATION).key(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void nullKeyFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(OPERATION).key(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void nullRequestIsAllowed() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        ExecutionResult<PaymentResult> result =
+                service.operation(OPERATION).key(KEY).request(null).execute(PaymentResult.class, this::countingAction);
+
+        assertThat(result).isInstanceOf(Success.class);
+        assertThat(actionCalls).hasValue(1);
+    }
+
+    @Test
+    void omittedTtlWithNullServiceDefaultLeavesExpiresAtNull() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(null).build();
+
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).expiresAt())
+                .isNull();
     }
 
     @Test
