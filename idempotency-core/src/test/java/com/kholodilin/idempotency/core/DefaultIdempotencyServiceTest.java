@@ -693,6 +693,55 @@ class DefaultIdempotencyServiceTest {
     }
 
     @Test
+    void nullOperationFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("operation");
+    }
+
+    @Test
+    void blankKeyFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(OPERATION).key(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void nullKeyFails() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        assertThatThrownBy(() -> service.operation(OPERATION).key(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void nullRequestIsAllowed() {
+        DefaultIdempotencyService service = serviceBuilder().build();
+
+        ExecutionResult<PaymentResult> result =
+                service.operation(OPERATION).key(KEY).request(null).execute(PaymentResult.class, this::countingAction);
+
+        assertThat(result).isInstanceOf(Success.class);
+        assertThat(actionCalls).hasValue(1);
+    }
+
+    @Test
+    void omittedTtlWithNullServiceDefaultLeavesExpiresAtNull() {
+        DefaultIdempotencyService service =
+                serviceBuilder().persistenceTtl(null).build();
+
+        service.operation(OPERATION).key(KEY).request(command).execute(PaymentResult.class, this::countingAction);
+
+        assertThat(store.data.get(new IdempotencyKey(OPERATION, KEY)).expiresAt())
+                .isNull();
+    }
+
+    @Test
     void replayThrowsOnUnexpectedProcessingRecord() throws Exception {
         DefaultIdempotencyService service = serviceBuilder().build();
         IdempotencyRecord processing =
