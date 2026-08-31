@@ -67,32 +67,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.3.1")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.3.2")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.3.1")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.3.1")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.3.2")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.3.2")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
