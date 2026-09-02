@@ -8,12 +8,13 @@
     <parent>
         <groupId>com.kholodilin</groupId>
         <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-        <version>0.3.3-SNAPSHOT</version>
+        <version>0.3.4-SNAPSHOT</version>
     </parent>
 
     <artifactId>spring-boot-idempotency-starter</artifactId>
     <name>Spring Boot Idempotency Starter</name>
     <description>Auto-configuration and configuration properties for transactional idempotency with JDBC/PostgreSQL, Redis and Caffeine.</description>
+    <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
 
     <dependencies>
         <dependency>

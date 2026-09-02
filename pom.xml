@@ -7,7 +7,7 @@
 
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-    <version>0.3.3-SNAPSHOT</version>
+    <version>0.3.4-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Spring Boot Idempotency Starter</name>
