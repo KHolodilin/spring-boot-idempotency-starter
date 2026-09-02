@@ -8,12 +8,13 @@
     <parent>
         <groupId>com.kholodilin</groupId>
         <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-        <version>0.3.3-SNAPSHOT</version>
+        <version>0.3.4-SNAPSHOT</version>
     </parent>
 
     <artifactId>idempotency-local-cache-caffeine</artifactId>
     <name>Idempotency Local Cache Caffeine</name>
     <description>LocalCache implementation backed by Caffeine: low-latency L1 cache and hot-key protection.</description>
+    <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
 
     <dependencies>
         <dependency>
