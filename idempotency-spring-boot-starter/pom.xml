@@ -15,6 +15,11 @@
     <name>Spring Boot Idempotency Starter</name>
     <description>Auto-configuration and configuration properties for transactional idempotency with JDBC/PostgreSQL, Redis and Caffeine.</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    <scm>
+        <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>
+        <developerConnection>scm:git:git@github.com:KHolodilin/spring-boot-idempotency-starter.git</developerConnection>
+        <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    </scm>
 
     <dependencies>
         <dependency>

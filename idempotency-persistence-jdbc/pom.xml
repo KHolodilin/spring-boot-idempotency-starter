@@ -15,6 +15,11 @@
     <name>Idempotency Persistence JDBC</name>
     <description>PersistenceStore implementation backed by JDBC/PostgreSQL: source of truth for idempotency records.</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    <scm>
+        <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>
+        <developerConnection>scm:git:git@github.com:KHolodilin/spring-boot-idempotency-starter.git</developerConnection>
+        <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    </scm>
 
     <dependencies>
         <dependency>

@@ -15,6 +15,11 @@
     <name>Idempotency Local Cache Caffeine</name>
     <description>LocalCache implementation backed by Caffeine: low-latency L1 cache and hot-key protection.</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    <scm>
+        <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>
+        <developerConnection>scm:git:git@github.com:KHolodilin/spring-boot-idempotency-starter.git</developerConnection>
+        <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    </scm>
 
     <dependencies>
         <dependency>

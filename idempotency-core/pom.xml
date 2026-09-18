@@ -15,6 +15,11 @@
     <name>Idempotency Core</name>
     <description>Transport-independent transactional idempotency: domain model, orchestration and SPI contracts.</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    <scm>
+        <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>
+        <developerConnection>scm:git:git@github.com:KHolodilin/spring-boot-idempotency-starter.git</developerConnection>
+        <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
+    </scm>
 
     <dependencies>
         <dependency>
