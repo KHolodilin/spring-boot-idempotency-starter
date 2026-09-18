@@ -135,6 +135,55 @@ class PostgresReactiveIdempotencyIntegrationTest {
     }
 
     @Test
+    void initializeBlockingRunsValidate() {
+        new R2dbcSchemaManager(databaseClient, "idempotency_records", SchemaMode.VALIDATE).initializeBlocking();
+    }
+
+    @Test
+    void schemaValidateFailsForMissingColumns() {
+        databaseClient
+                .sql("CREATE TABLE incomplete_idempotency (operation VARCHAR(128) PRIMARY KEY)")
+                .fetch()
+                .rowsUpdated()
+                .block();
+
+        StepVerifier.create(new R2dbcSchemaManager(databaseClient, "incomplete_idempotency", SchemaMode.VALIDATE)
+                        .initialize())
+                .verifyErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("missing required columns"));
+    }
+
+    @Test
+    void schemaValidateAcceptsSchemaQualifiedTable() {
+        databaseClient
+                .sql("CREATE SCHEMA IF NOT EXISTS billing")
+                .fetch()
+                .rowsUpdated()
+                .block();
+        new R2dbcSchemaManager(databaseClient, "billing.idempotency_records", SchemaMode.CREATE)
+                .initialize()
+                .block();
+        StepVerifier.create(new R2dbcSchemaManager(databaseClient, "billing.idempotency_records", SchemaMode.VALIDATE)
+                        .initialize())
+                .verifyComplete();
+    }
+
+    @Test
+    void defaultConstructorUsesDefaultTableName() {
+        R2dbcPersistenceStore defaultStore = new R2dbcPersistenceStore(databaseClient);
+        IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "def-ctor");
+
+        tx.transactional(defaultStore
+                        .acquire(key, "h", clock.instant(), null)
+                        .doOnNext(won -> assertThat(won).isTrue())
+                        .then(defaultStore.complete(key, null, null, clock.instant())))
+                .block();
+
+        assertThat(defaultStore.find(key).block()).isPresent();
+    }
+
+    @Test
     void acquireWinsOnceAndMapsAllFields() {
         IdempotencyKey key = new IdempotencyKey("CREATE_PAYMENT", "map-1");
         Instant createdAt = Instant.parse("2026-08-09T00:00:00Z");

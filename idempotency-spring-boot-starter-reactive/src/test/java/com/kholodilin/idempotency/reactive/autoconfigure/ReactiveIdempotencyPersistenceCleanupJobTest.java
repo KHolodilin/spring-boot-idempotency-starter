@@ -70,4 +70,16 @@ class ReactiveIdempotencyPersistenceCleanupJobTest {
 
         assertThat(calls).hasValue(1);
     }
+
+    @Test
+    void treatsNullBatchAsZeroDeleted() {
+        R2dbcIdempotencyPersistenceCleanup cleanup = mock(R2dbcIdempotencyPersistenceCleanup.class);
+        when(cleanup.deleteExpired(any(), anyInt())).thenReturn(Mono.empty());
+
+        TransactionalOperator operator = mock(TransactionalOperator.class);
+        when(operator.transactional(any(Mono.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        new ReactiveIdempotencyPersistenceCleanupJob(cleanup, operator, Clock.fixed(NOW, ZoneOffset.UTC), 10)
+                .deleteExpired();
+    }
 }

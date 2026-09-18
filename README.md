@@ -3,6 +3,7 @@
 [![CI](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter/branch/main/graph/badge.svg)](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter)
 [![Maven Central](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter.svg?label=maven-central)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter)
+[![Maven Central (reactive)](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-reactive.svg?label=maven-central%20reactive)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-reactive)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -10,6 +11,11 @@
 Transactional idempotency for Spring Boot 4 / Java 21: a repeated request with the same
 `Idempotency-Key` does not execute the business operation again — it replays the stored
 outcome of the first execution, including deterministic business rejections.
+
+Two sibling starters share the same `ExecutionResult` model and `idempotency_records`
+table: **servlet/JDBC** (`spring-boot-idempotency-starter`) and **WebFlux/R2DBC**
+(`spring-boot-idempotency-starter-reactive`). Pick the one that matches how you write
+to PostgreSQL — JDBC cannot share a transaction with R2DBC.
 
 The key idea: the idempotency record is committed **in the same transaction** as the
 business changes. A rollback also rolls the record back — half-committed states are
@@ -33,6 +39,8 @@ impossible.
 
 ## Architecture
 
+Servlet / JDBC:
+
 ```mermaid
 flowchart LR
     C[Controller] --> S["PaymentService<br/>@Transactional"]
@@ -41,6 +49,19 @@ flowchart LR
     I --> L2["L2 Redis<br/>(optional, fail-open)"]
     I --> PG[("PostgreSQL<br/>source of truth")]
     I --> A["business action<br/>Supplier&lt;ExecutionResult&gt;"]
+```
+
+WebFlux / R2DBC — same caches and table, reactive SPI and `TransactionalOperator`
+instead of `@Transactional`:
+
+```mermaid
+flowchart LR
+    C[Controller] --> S["PaymentService<br/>TransactionalOperator"]
+    S --> I[ReactiveIdempotencyService]
+    I --> L1["L1 Caffeine<br/>(optional, sync)"]
+    I --> L2["L2 Redis reactive<br/>(optional, fail-open)"]
+    I --> PG[("PostgreSQL R2DBC<br/>source of truth")]
+    I --> A["business action<br/>Supplier&lt;Mono&lt;ExecutionResult&gt;&gt;"]
 ```
 
 Execution flow of `operation(...).execute(...)`:
@@ -66,45 +87,53 @@ consulted on the request path.
 
 ## Quick start
 
+- **Servlet / JDBC** — `DataSource` + `@Transactional` → [`spring-boot-idempotency-starter`](#servlet--jdbc)
+- **WebFlux / R2DBC** — `ConnectionFactory` + `TransactionalOperator` → [`spring-boot-idempotency-starter-reactive`](#webflux--r2dbc)
+
+Do not mix JDBC `IdempotencyService` and reactive `ReactiveIdempotencyService` in the
+same business transaction.
+
+### Servlet / JDBC
+
 Maven:
 
 ```xml
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.3.6</version>
+    <version>0.4.0</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.3.6</version>
+    <version>0.4.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.3.6</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.3.6")
+implementation("com.kholodilin:spring-boot-idempotency-starter:0.4.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.3.6")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.3.6")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.4.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:0.4.0")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
 `IdempotencyService` automatically. The cache modules activate simply by being present
 on the classpath.
 
-### Service
+#### Service
 
 ```java
 @Service
@@ -133,7 +162,7 @@ public class PaymentService {
 }
 ```
 
-### Controller: `valueOrThrow()` + a global handler
+#### Controller: `valueOrThrow()` + a global handler
 
 ```java
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
@@ -166,7 +195,7 @@ class ApiExceptionHandler {
 `valueOrThrow()` throws **outside** the transaction — a business rejection can never
 cause a rollback, so `REJECTED` is committed and replayed correctly.
 
-### Alternative: `fold()`
+#### Alternative: `fold()`
 
 ```java
 return paymentService.refund(key, request).fold(
@@ -177,12 +206,12 @@ return paymentService.refund(key, request).fold(
 
 Typed access to rejection details: `rejected.detailsAs(InsufficientFundsDetails.class)`.
 
-## WebFlux / R2DBC
+### WebFlux / R2DBC
 
 The JDBC starter cannot share a transaction with R2DBC business writes. Use the
-**separate** artifact `spring-boot-idempotency-starter-reactive` in WebFlux apps.
-Do not mix JDBC `IdempotencyService` and reactive `ReactiveIdempotencyService` in
-the same business transaction — they talk to different connection stacks.
+separate artifact `spring-boot-idempotency-starter-reactive`. Replay, fingerprint
+conflict and `ExecutionResult` are the same types as JDBC; the table is the same
+`idempotency_records` schema (`PRIMARY KEY (operation, idempotency_key)`).
 
 Maven:
 
@@ -190,41 +219,105 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 
 <!-- optional: L1 cache (same module as the JDBC starter) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a ReactiveRedisConnectionFactory) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
-A PostgreSQL `ConnectionFactory` / `DatabaseClient` in the context is enough — the
-starter assembles `ReactiveIdempotencyService`. `@Transactional` on a WebFlux
-service method is **not** enough: wrap the chain with `TransactionalOperator`.
+Gradle:
 
-```java
-return transactionalOperator.transactional(
-    idempotencyService
-        .operation("CREATE_PAYMENT")
-        .key(idempotencyKey)
-        .request(request)
-        .execute(PaymentResult.class, () -> doCreatePayment(request)));
+```kotlin
+implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:0.4.0")
+
+// optional caches
+implementation("com.kholodilin:idempotency-local-cache-caffeine:0.4.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:0.4.0")
 ```
 
-`doCreatePayment` returns `Mono<ExecutionResult<PaymentResult>>`. Replay and
-fingerprint conflict use the same `ExecutionResult` / `IdempotencyConflictException`
-types as the JDBC starter. The table is the same
-`idempotency_records` schema (`PRIMARY KEY (operation, idempotency_key)`).
+A PostgreSQL `ConnectionFactory` and `DatabaseClient` in the context are enough —
+the starter assembles `ReactiveIdempotencyService`. You also need WebFlux + R2DBC
+on the classpath (`spring-boot-starter-webflux`, `spring-boot-starter-data-r2dbc`
+or `spring-boot-starter-r2dbc`, `r2dbc-postgresql`).
+
+`@Transactional` on a WebFlux service method is **not** enough. Register a
+`TransactionalOperator` and wrap the chain:
+
+```java
+@Bean
+TransactionalOperator transactionalOperator(ReactiveTransactionManager tm) {
+    return TransactionalOperator.create(tm);
+}
+```
+
+#### Service
+
+```java
+@Service
+public class PaymentService {
+
+    private final ReactiveIdempotencyService idempotencyService;
+    private final TransactionalOperator transactionalOperator;
+
+    public Mono<ExecutionResult<PaymentResult>> createPayment(String key, CreatePaymentRequest request) {
+        return transactionalOperator.transactional(
+                idempotencyService
+                        .operation("CREATE_PAYMENT")
+                        .key(key)
+                        .request(request)
+                        // optional: override persistence.ttl for this acquire only
+                        // .ttl(Duration.ofDays(30))
+                        .execute(PaymentResult.class, () -> doCreatePayment(request)));
+    }
+
+    private Mono<ExecutionResult<PaymentResult>> doCreatePayment(CreatePaymentRequest request) {
+        if (request.amount().compareTo(balance) > 0) {
+            return Mono.just(ExecutionResult.rejected("INSUFFICIENT_FUNDS",
+                    new InsufficientFundsDetails(request.amount(), balance)));
+        }
+        return paymentRepository.insert(...)
+                .thenReturn(ExecutionResult.success(new PaymentResult(...)));
+    }
+}
+```
+
+#### Controller: `valueOrThrow()` + a global handler
+
+```java
+@PostMapping("/payments")
+@ResponseStatus(HttpStatus.CREATED)
+Mono<PaymentResult> create(@RequestHeader("Idempotency-Key") String key,
+                           @RequestBody CreatePaymentRequest request) {
+    return paymentService.createPayment(key, request).map(ExecutionResult::valueOrThrow);
+}
+```
+
+The same `@RestControllerAdvice` as in the JDBC example works for WebFlux:
+`IdempotencyRejectedException` → 422, `IdempotencyConflictException` → 409.
+`valueOrThrow()` still runs **outside** the transaction (`map` after
+`TransactionalOperator` completes), so a business rejection cannot roll back a
+committed `REJECTED` row.
+
+#### Alternative: `fold()`
+
+```java
+return paymentService.refund(key, request).map(result -> result.fold(
+        ResponseEntity::ok,
+        rejected -> ResponseEntity.unprocessableEntity()
+                .body(Map.of("code", rejected.errorCode(), "details", rejected.details()))));
+```
 
 ## Configuration
 
@@ -241,7 +334,8 @@ idempotency:
     max-size: 10000
     statistics: false
 
-  distributed-cache:                   # requires idempotency-distributed-cache-redis + RedisConnectionFactory
+  distributed-cache:                   # JDBC: redis + RedisConnectionFactory
+                                       # WebFlux: redis-reactive + ReactiveRedisConnectionFactory
     enabled: true
     ttl: 1h
     key-prefix: "idempotency:"
@@ -300,19 +394,28 @@ Any SPI bean replaces the default one (every auto-configured bean is
 FingerprintStrategy fingerprintStrategy() { ... }      // custom fingerprint strategy
 
 @Bean
-PersistenceStore persistenceStore() { ... }            // custom persistence
+PersistenceStore persistenceStore() { ... }            // JDBC persistence
+
+@Bean
+ReactivePersistenceStore reactivePersistenceStore() { ... }  // R2DBC persistence
 
 @Bean
 LocalCache localCache() { ... }
 
 @Bean
-DistributedCache distributedCache() { ... }
+DistributedCache distributedCache() { ... }            // JDBC Redis
+
+@Bean
+ReactiveDistributedCache reactiveDistributedCache() { ... }  // WebFlux Redis
 
 @Bean
 IdempotencySerializer idempotencySerializer() { ... }
 
 @Bean
-TransactionContext transactionContext() { ... }        // default: SpringTransactionContext
+TransactionContext transactionContext() { ... }        // JDBC: SpringTransactionContext
+
+@Bean
+ReactiveTransactionContext reactiveTransactionContext() { ... }  // WebFlux: SpringReactiveTransactionContext
 
 @Bean
 IdempotencyMetrics idempotencyMetrics() { ... }         // default: Micrometer when MeterRegistry present
@@ -327,15 +430,19 @@ When a `MeterRegistry` is present, the following meters are registered automatic
 
 ## Demo
 
+Both demos listen on `http://localhost:8080` — run one at a time. Redis is optional
+(fail-open). The reactive compose uses Postgres `5433` and Redis `6380` so the
+containers can sit next to the servlet demo.
+
 Servlet / JDBC:
 
 ```bash
 cd idempotency-demo
-docker compose up -d          # PostgreSQL + Redis (Redis is optional)
+docker compose up -d
 mvn spring-boot:run
 ```
 
-WebFlux / R2DBC (Postgres `5433`, Redis `6380` so it can run next to the servlet demo):
+WebFlux / R2DBC:
 
 ```bash
 cd idempotency-demo-reactive
@@ -376,6 +483,7 @@ curl -X POST localhost:8080/api/payments \
 The idempotency record and the business changes must commit atomically. Without a
 transaction it is possible to persist an "outcome" without the business effect (or the
 other way round). Calling outside a transaction throws `MissingTransactionException`.
+On WebFlux `@Transactional` is not enough — wrap with `TransactionalOperator`.
 
 **What happens if Redis is down?**
 With the default `fail-open` policy — nothing: the error is logged, a read behaves as a
@@ -396,7 +504,8 @@ of its outcome. The business action executes exactly once.
 **How do I clean up expired records?**
 While a row exists it is replayed / conflicts — TTL does not hide it. Enable the built-in
 job (`idempotency.persistence.cleanup.enabled=true`) or call
-`IdempotencyPersistenceCleanup#deleteExpired`. JDBC cleanup uses
+`IdempotencyPersistenceCleanup#deleteExpired` (JDBC) /
+`R2dbcIdempotencyPersistenceCleanup#deleteExpired` (R2DBC). JDBC cleanup uses
 `FOR UPDATE SKIP LOCKED` so it does not block hot request transactions.
 
 **When should I enable `lookup-before-acquire`?**

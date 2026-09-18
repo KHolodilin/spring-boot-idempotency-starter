@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -15,9 +16,11 @@ import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
+import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.reactive.spi.ReactivePersistenceStore;
 import com.kholodilin.idempotency.reactive.spi.ReactiveTransactionContext;
 import com.kholodilin.idempotency.reactive.testsupport.InMemoryReactiveDistributedCache;
 import com.kholodilin.idempotency.reactive.testsupport.InMemoryReactiveStore;
@@ -28,9 +31,12 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class DefaultReactiveIdempotencyServiceTest {
 
@@ -395,9 +401,33 @@ class DefaultReactiveIdempotencyServiceTest {
     @Test
     void blankOperationIsRejected() {
         DefaultReactiveIdempotencyService service = serviceBuilder().build();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.operation(" "))
+        assertThatThrownBy(() -> service.operation(" "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("operation");
+    }
+
+    @Test
+    void nullOperationIsRejected() {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+        assertThatThrownBy(() -> service.operation(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("operation");
+    }
+
+    @Test
+    void blankKeyIsRejected() {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+        assertThatThrownBy(() -> service.operation(OPERATION).key(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void nullKeyIsRejected() {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+        assertThatThrownBy(() -> service.operation(OPERATION).key(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
     }
 
     @Test
@@ -435,6 +465,191 @@ class DefaultReactiveIdempotencyServiceTest {
 
         assertThat(actionCalls).hasValue(1);
         assertThat(local.evicts).hasValue(1);
+    }
+
+    @Test
+    void activeImmediateTransactionSatisfiesRequireActiveTransaction() {
+        DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(store)
+                .clock(clock)
+                .transactionContext(ReactiveTransactionContext.IMMEDIATE)
+                .requireActiveTransaction(true)
+                .build();
+
+        StepVerifier.create(service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
+                .assertNext(result -> assertThat(result.isSuccess()).isTrue())
+                .verifyComplete();
+        assertThat(actionCalls).hasValue(1);
+    }
+
+    @Test
+    void lookupBeforeAcquireWithEmptyStoreProceedsToAcquire() {
+        DefaultReactiveIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction)
+                .block();
+
+        assertThat(actionCalls).hasValue(1);
+        assertThat(store.delegate.findCalls).hasValue(1);
+        assertThat(store.delegate.acquireCalls).hasValue(1);
+    }
+
+    @Test
+    void lookupBeforeAcquireSkipsNonTerminalPersistenceRow() {
+        IdempotencyRecord processing = IdempotencyRecord.processing(
+                new IdempotencyKey(OPERATION, KEY), seedCompletedRecord().requestHash(), NOW.minusSeconds(1), null);
+        store.delegate.data.put(processing.key(), processing);
+        DefaultReactiveIdempotencyService service =
+                serviceBuilder().lookupBeforeAcquire(true).build();
+
+        StepVerifier.create(service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
+                .verifyErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("after 3 attempts"));
+        assertThat(actionCalls).hasValue(0);
+        assertThat(store.delegate.findCalls.get()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void acquireIsRetriedAfterConcurrentRollback() {
+        ReactivePersistenceStore racingStore = mock(ReactivePersistenceStore.class);
+        when(racingStore.find(any())).thenReturn(Mono.just(Optional.empty()));
+        when(racingStore.acquire(any(), any(), any(), any()))
+                .thenReturn(Mono.just(false))
+                .thenReturn(Mono.just(true));
+        when(racingStore.complete(any(), any(), any(), any())).thenReturn(Mono.empty());
+
+        DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(racingStore)
+                .clock(clock)
+                .requireActiveTransaction(false)
+                .build();
+
+        StepVerifier.create(service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
+                .assertNext(result -> assertThat(result.isSuccess()).isTrue())
+                .verifyComplete();
+        assertThat(actionCalls).hasValue(1);
+        verify(racingStore, times(2)).acquire(any(), any(), any(), any());
+    }
+
+    @Test
+    void acquireLoopExhaustionThrowsIllegalStateException() {
+        ReactivePersistenceStore racingStore = mock(ReactivePersistenceStore.class);
+        when(racingStore.find(any())).thenReturn(Mono.just(Optional.empty()));
+        when(racingStore.acquire(any(), any(), any(), any())).thenReturn(Mono.just(false));
+
+        DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(racingStore)
+                .clock(clock)
+                .requireActiveTransaction(false)
+                .build();
+
+        StepVerifier.create(service.operation(OPERATION)
+                        .key(KEY)
+                        .request(command)
+                        .execute(PaymentResult.class, this::countingAction))
+                .verifyErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("after 3 attempts"));
+        assertThat(actionCalls).hasValue(0);
+        verify(racingStore, times(3)).acquire(any(), any(), any(), any());
+    }
+
+    @Test
+    void builderAcceptsCustomFingerprintAndSerializer() {
+        DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(store)
+                .fingerprintStrategy(request -> "fixed-hash")
+                .serializer(new JacksonIdempotencySerializer())
+                .clock(clock)
+                .requireActiveTransaction(false)
+                .build();
+
+        service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction)
+                .block();
+
+        assertThat(store.delegate.data.get(new IdempotencyKey(OPERATION, KEY)).requestHash())
+                .isEqualTo("fixed-hash");
+    }
+
+    @Test
+    void rejectedWithoutDetailsPersistsNullPayload() {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+
+        ExecutionResult<PaymentResult> first = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, () -> Mono.just(ExecutionResult.rejected("GONE")))
+                .block();
+
+        assertThat(first).isInstanceOf(Rejected.class);
+        assertThat(store.delegate.data.get(new IdempotencyKey(OPERATION, KEY)).resultPayload())
+                .isNull();
+    }
+
+    @Test
+    void distributedOnlyCacheHitReplaysWithoutLocalPromotion() {
+        DefaultReactiveIdempotencyService service =
+                serviceBuilder().distributedCache(distributed).build();
+        IdempotencyRecord record = seedCompletedRecord();
+        distributed.delegate.data.put(record.key(), record);
+
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(command)
+                .execute(PaymentResult.class, this::countingAction)
+                .block();
+
+        assertThat(actionCalls).hasValue(0);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(store.delegate.acquireCalls).hasValue(0);
+        assertThat(local.data).isEmpty();
+    }
+
+    @Test
+    void nullRequestIsAllowed() {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+
+        ExecutionResult<PaymentResult> result = service.operation(OPERATION)
+                .key(KEY)
+                .request(null)
+                .execute(PaymentResult.class, this::countingAction)
+                .block();
+
+        assertThat(result).isInstanceOf(Success.class);
+        assertThat(actionCalls).hasValue(1);
+    }
+
+    @Test
+    void replayThrowsOnUnexpectedProcessingRecord() throws Exception {
+        DefaultReactiveIdempotencyService service = serviceBuilder().build();
+        IdempotencyRecord processing =
+                IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), "hash", NOW, null);
+        var replay = DefaultReactiveIdempotencyService.class.getDeclaredMethod(
+                "replay", IdempotencyRecord.class, String.class, Class.class);
+        replay.setAccessible(true);
+
+        assertThatThrownBy(() -> {
+                    try {
+                        replay.invoke(service, processing, "hash", PaymentResult.class);
+                    } catch (java.lang.reflect.InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                })
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unexpected committed PROCESSING");
     }
 
     private IdempotencyRecord seedCompletedRecord() {
