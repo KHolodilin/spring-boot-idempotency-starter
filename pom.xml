@@ -7,13 +7,13 @@
 
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-    <version>0.3.6-SNAPSHOT</version>
+    <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Spring Boot Idempotency Starter</name>
     <description>
-        Transactional idempotency Spring Boot starter for Java with JDBC/PostgreSQL persistence,
-        Redis distributed cache and Caffeine local cache.
+        Transactional idempotency Spring Boot starter for Java with JDBC/R2DBC PostgreSQL
+        persistence, Redis distributed cache and Caffeine local cache.
     </description>
     <!-- Maven appends /${artifactId} to inherited url/scm unless this is disabled. -->
     <url child.project.url.inherit.append.path="false">https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
@@ -46,11 +46,16 @@
 
     <modules>
         <module>idempotency-core</module>
+        <module>idempotency-core-reactive</module>
         <module>idempotency-persistence-jdbc</module>
+        <module>idempotency-persistence-r2dbc</module>
         <module>idempotency-local-cache-caffeine</module>
         <module>idempotency-distributed-cache-redis</module>
+        <module>idempotency-distributed-cache-redis-reactive</module>
         <module>idempotency-spring-boot-starter</module>
+        <module>idempotency-spring-boot-starter-reactive</module>
         <module>idempotency-demo</module>
+        <module>idempotency-demo-reactive</module>
     </modules>
 
     <properties>
@@ -121,7 +126,27 @@
             </dependency>
             <dependency>
                 <groupId>com.kholodilin</groupId>
+                <artifactId>idempotency-core-reactive</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
+                <artifactId>idempotency-persistence-r2dbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
+                <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
                 <artifactId>spring-boot-idempotency-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
+                <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
