@@ -101,32 +101,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:0.4.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter:1.0.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.4.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:0.4.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:1.0.0")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter assembles the
@@ -219,32 +219,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 
 <!-- optional: L1 cache (same module as the JDBC starter) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a ReactiveRedisConnectionFactory) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:0.4.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:1.0.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:0.4.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:0.4.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:1.0.0")
 ```
 
 A PostgreSQL `ConnectionFactory` and `DatabaseClient` in the context are enough —
@@ -548,8 +548,8 @@ to fix), environment constraints (Maven Enforcer), javadoc validity and a minimu
 Push a tag — CI publishes signed artifacts to Maven Central and creates a GitHub Release:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ## License
