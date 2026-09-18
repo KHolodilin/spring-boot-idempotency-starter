@@ -64,3 +64,16 @@ jobs:
             idempotency-spring-boot-starter/target/spring-boot-idempotency-starter-*.jar
             !idempotency-spring-boot-starter/target/*-sources.jar
             !idempotency-spring-boot-starter/target/*-javadoc.jar
+            idempotency-core-reactive/target/idempotency-core-reactive-*.jar
+            !idempotency-core-reactive/target/*-sources.jar
+            !idempotency-core-reactive/target/*-javadoc.jar
+            !idempotency-core-reactive/target/*-tests.jar
+            idempotency-persistence-r2dbc/target/idempotency-persistence-r2dbc-*.jar
+            !idempotency-persistence-r2dbc/target/*-sources.jar
+            !idempotency-persistence-r2dbc/target/*-javadoc.jar
+            idempotency-distributed-cache-redis-reactive/target/idempotency-distributed-cache-redis-reactive-*.jar
+            !idempotency-distributed-cache-redis-reactive/target/*-sources.jar
+            !idempotency-distributed-cache-redis-reactive/target/*-javadoc.jar
+            idempotency-spring-boot-starter-reactive/target/spring-boot-idempotency-starter-reactive-*.jar
+            !idempotency-spring-boot-starter-reactive/target/*-sources.jar
+            !idempotency-spring-boot-starter-reactive/target/*-javadoc.jar

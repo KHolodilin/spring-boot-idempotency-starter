@@ -20,11 +20,16 @@ impossible.
 | Module | Purpose |
 |---|---|
 | `idempotency-core` | Domain model, SPI, `DefaultIdempotencyService`, canonical JSON fingerprint, Jackson serialization |
+| `idempotency-core-reactive` | `ReactiveIdempotencyService` (`Mono<ExecutionResult>`), reactive SPI |
 | `idempotency-persistence-jdbc` | `PersistenceStore` for PostgreSQL (`JdbcClient`), schema management |
+| `idempotency-persistence-r2dbc` | `ReactivePersistenceStore` for PostgreSQL (`DatabaseClient`), same table/schema |
 | `idempotency-local-cache-caffeine` | L1 cache (Caffeine) — fast replays, hot-key protection |
 | `idempotency-distributed-cache-redis` | L2 cache (Redis, fail-open) — shared across application instances |
-| `spring-boot-idempotency-starter` | Auto-configuration, configuration properties, Micrometer metrics |
-| `idempotency-demo` | Runnable demo: REST API, docker-compose, all scenarios |
+| `idempotency-distributed-cache-redis-reactive` | L2 cache (`ReactiveStringRedisTemplate`, fail-open) |
+| `spring-boot-idempotency-starter` | Servlet/JDBC auto-configuration, configuration properties, Micrometer metrics |
+| `spring-boot-idempotency-starter-reactive` | WebFlux/R2DBC auto-configuration (`ConnectionFactory`), same `idempotency.*` prefix |
+| `idempotency-demo` | Runnable servlet demo: REST API, docker-compose, all scenarios |
+| `idempotency-demo-reactive` | Runnable WebFlux demo (own compose ports) |
 
 ## Architecture
 
@@ -172,6 +177,55 @@ return paymentService.refund(key, request).fold(
 
 Typed access to rejection details: `rejected.detailsAs(InsufficientFundsDetails.class)`.
 
+## WebFlux / R2DBC
+
+The JDBC starter cannot share a transaction with R2DBC business writes. Use the
+**separate** artifact `spring-boot-idempotency-starter-reactive` in WebFlux apps.
+Do not mix JDBC `IdempotencyService` and reactive `ReactiveIdempotencyService` in
+the same business transaction — they talk to different connection stacks.
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>com.kholodilin</groupId>
+    <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+</dependency>
+
+<!-- optional: L1 cache (same module as the JDBC starter) -->
+<dependency>
+    <groupId>com.kholodilin</groupId>
+    <artifactId>idempotency-local-cache-caffeine</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+</dependency>
+
+<!-- optional: L2 cache (requires a ReactiveRedisConnectionFactory) -->
+<dependency>
+    <groupId>com.kholodilin</groupId>
+    <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+</dependency>
+```
+
+A PostgreSQL `ConnectionFactory` / `DatabaseClient` in the context is enough — the
+starter assembles `ReactiveIdempotencyService`. `@Transactional` on a WebFlux
+service method is **not** enough: wrap the chain with `TransactionalOperator`.
+
+```java
+return transactionalOperator.transactional(
+    idempotencyService
+        .operation("CREATE_PAYMENT")
+        .key(idempotencyKey)
+        .request(request)
+        .execute(PaymentResult.class, () -> doCreatePayment(request)));
+```
+
+`doCreatePayment` returns `Mono<ExecutionResult<PaymentResult>>`. Replay and
+fingerprint conflict use the same `ExecutionResult` / `IdempotencyConflictException`
+types as the JDBC starter. The table is the same
+`idempotency_records` schema (`PRIMARY KEY (operation, idempotency_key)`).
+
 ## Configuration
 
 ```yaml
@@ -214,7 +268,8 @@ idempotency:
 - `none` — the starter does nothing.
 
 The canonical DDL lives at
-`idempotency-persistence-jdbc/src/main/resources/com/kholodilin/idempotency/jdbc/idempotency-records.sql` —
+`idempotency-persistence-jdbc/src/main/resources/com/kholodilin/idempotency/jdbc/idempotency-records.sql`
+(R2DBC ships the same file under `idempotency-persistence-r2dbc/.../r2dbc/idempotency-records.sql`) —
 copy it into your migrations:
 
 ```sql
@@ -272,9 +327,19 @@ When a `MeterRegistry` is present, the following meters are registered automatic
 
 ## Demo
 
+Servlet / JDBC:
+
 ```bash
 cd idempotency-demo
 docker compose up -d          # PostgreSQL + Redis (Redis is optional)
+mvn spring-boot:run
+```
+
+WebFlux / R2DBC (Postgres `5433`, Redis `6380` so it can run next to the servlet demo):
+
+```bash
+cd idempotency-demo-reactive
+docker compose up -d
 mvn spring-boot:run
 ```
 
@@ -344,8 +409,13 @@ Yes: `resultType = Void.class`, `ExecutionResult.success(null)`.
 
 **Can I use a database other than PostgreSQL?**
 Out of the box — PostgreSQL only (`ON CONFLICT DO NOTHING`, `JSONB`). For another
-database implement your own `PersistenceStore` — the rest of the library is
-dialect-agnostic.
+database implement your own `PersistenceStore` / `ReactivePersistenceStore` — the
+rest of the library is dialect-agnostic.
+
+**Can I use the JDBC and reactive starters together?**
+Yes as two beans (`IdempotencyService` and `ReactiveIdempotencyService`), but never
+in one business transaction: JDBC uses `DataSource` / ThreadLocal TX, reactive uses
+`ConnectionFactory` / Reactor Context. Pick the starter that matches the writes.
 
 ## Requirements
 

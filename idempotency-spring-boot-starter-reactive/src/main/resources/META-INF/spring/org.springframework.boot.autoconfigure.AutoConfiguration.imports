@@ -1,0 +1,6 @@
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyR2dbcAutoConfiguration
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyCaffeineAutoConfiguration
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyRedisAutoConfiguration
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyMetricsAutoConfiguration
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyCleanupAutoConfiguration
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyAutoConfiguration

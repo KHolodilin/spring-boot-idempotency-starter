@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: idempotency-demo-reactive
+
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5433/idempotency_demo_rx
+    username: demo
+    password: demo
+
+  sql:
+    init:
+      mode: always
+
+  data:
+    redis:
+      host: localhost
+      port: 6380
+
+idempotency:
+  enabled: true
+
+  fingerprint:
+    algorithm: SHA-256
+
+  local-cache:
+    enabled: true
+    ttl: 10m
+    max-size: 10000
+    statistics: true
+
+  distributed-cache:
+    enabled: true
+    ttl: 1h
+    key-prefix: "idempotency-demo-rx:"
+    failure-policy: fail-open
+
+  persistence:
+    enabled: true
+    table-name: idempotency_records
+    ttl: 365d
+    lookup-before-acquire: false
+    schema:
+      mode: create
+    cleanup:
+      enabled: false

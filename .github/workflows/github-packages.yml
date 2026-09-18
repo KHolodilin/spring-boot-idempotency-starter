@@ -61,6 +61,10 @@ jobs:
             com.kholodilin.idempotency-local-cache-caffeine
             com.kholodilin.idempotency-distributed-cache-redis
             com.kholodilin.spring-boot-idempotency-starter
+            com.kholodilin.idempotency-core-reactive
+            com.kholodilin.idempotency-persistence-r2dbc
+            com.kholodilin.idempotency-distributed-cache-redis-reactive
+            com.kholodilin.spring-boot-idempotency-starter-reactive
           )
           for pkg in "${PACKAGES[@]}"; do
             if gh api "/users/${OWNER}/packages/maven/${pkg}" >/dev/null 2>&1; then
