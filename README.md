@@ -24,7 +24,7 @@ so the two can never disagree — if the transaction rolls back, the
 record rolls back with it, and no key is ever left stuck in
 `PROCESSING`.
 
-![Spring Boot Idempotency Starter](docs/images/spring-boot-idempotency-starter-hero.png)
+![Spring Boot Idempotency Starter](docs/images/spring-boot-idempotency-starter-hero.gif)
 
 ## 📚 Contents
 
