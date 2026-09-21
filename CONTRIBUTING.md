@@ -28,7 +28,8 @@ The build runs all checks:
 1. Fork the repository and create a branch from `main`.
 2. Make your change; add or update tests for any behavior change.
 3. Run `mvn clean verify` locally — CI runs the same checks.
-4. Open a pull request with a clear description of the motivation and the change.
+4. Update [CHANGELOG.md](CHANGELOG.md) for any user-visible change.
+5. Open a pull request with a clear description of the motivation and the change.
 
 Keep pull requests focused: one logical change per PR is much easier to review.
 
