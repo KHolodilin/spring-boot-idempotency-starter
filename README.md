@@ -214,8 +214,6 @@ public class PaymentService {
                 .operation("CREATE_PAYMENT")
                 .key(key)
                 .request(request)
-                // optional: override persistence.ttl for this acquire only
-                // .ttl(Duration.ofDays(30))
                 .execute(PaymentResult.class, () -> {
                     if (request.amount().compareTo(balance) > 0) {
                         // deterministic business rejection: persisted and replayed on duplicates
@@ -349,8 +347,6 @@ public class PaymentService {
                         .operation("CREATE_PAYMENT")
                         .key(key)
                         .request(request)
-                        // optional: override persistence.ttl for this acquire only
-                        // .ttl(Duration.ofDays(30))
                         .execute(PaymentResult.class, () -> doCreatePayment(request)));
     }
 
