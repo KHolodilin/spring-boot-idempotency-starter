@@ -4,6 +4,8 @@
 [![codecov](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter/branch/main/graph/badge.svg)](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter)
 [![Maven Central](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter.svg?label=maven-central)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter)
 [![Maven Central (reactive)](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-reactive.svg?label=maven-central%20reactive)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-reactive)
+[![Scarf downloads](https://api.scarf.sh/v2/packages/Kholodilin/3d9ac965-190f-46ad-a7b0-9306d6cda904/downloads-badge)](https://scarf.sh)
+[![Scarf companies](https://api.scarf.sh/v2/packages/Kholodilin/3d9ac965-190f-46ad-a7b0-9306d6cda904/commercial-users-badge)](https://scarf.sh)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
