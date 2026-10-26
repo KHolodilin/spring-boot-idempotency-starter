@@ -142,9 +142,10 @@ class IdempotencyAutoConfigurationTest {
 
     @Test
     void metricsAreMicrometerBasedWhenMeterRegistryExists() {
-        withDataSource().withBean(MeterRegistry.class, SimpleMeterRegistry::new).run(context -> assertThat(
-                        context.getBean(IdempotencyMetrics.class))
-                .isInstanceOf(MicrometerIdempotencyMetrics.class));
+        withDataSource()
+                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+                .run(context -> assertThat(context.getBean(IdempotencyMetrics.class))
+                        .isInstanceOf(MicrometerIdempotencyMetrics.class));
     }
 
     @Test
