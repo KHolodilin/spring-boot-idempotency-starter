@@ -44,9 +44,11 @@ public class PaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody RefundRequest request) {
         return paymentService
                 .refund(idempotencyKey, request)
-                .fold(ResponseEntity::ok, rejected -> ResponseEntity.unprocessableEntity()
-                        .body(Map.of(
-                                "code", rejected.errorCode(),
-                                "details", rejected.details())));
+                .fold(
+                        ResponseEntity::ok,
+                        rejected -> ResponseEntity.unprocessableEntity()
+                                .body(Map.of(
+                                        "code", rejected.errorCode(),
+                                        "details", rejected.details())));
     }
 }
