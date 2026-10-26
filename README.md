@@ -159,7 +159,7 @@ writes.
 > **Do not mix JDBC and R2DBC idempotency services in the same business
 > transaction.** JDBC and R2DBC use different transaction models.
 
-The snippets below use `1.0.0`. The Maven Central badges at the top of
+The snippets below use `1.0.1`. The Maven Central badges at the top of
 this page always show the latest release.
 
 ### Servlet / JDBC
@@ -170,32 +170,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:1.0.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter:1.0.1")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:1.0.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.1")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:1.0.1")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter
@@ -290,32 +290,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 
 <!-- optional: L1 cache (same module as the JDBC starter) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a ReactiveRedisConnectionFactory) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:1.0.0")
+implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:1.0.1")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.0")
-implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:1.0.0")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.1")
+implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:1.0.1")
 ```
 
 A PostgreSQL `ConnectionFactory` and `DatabaseClient` in the context are
@@ -762,8 +762,8 @@ Push a tag — CI publishes signed artifacts to Maven Central and
 creates a GitHub Release:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 ## 🤝 Contributing and support

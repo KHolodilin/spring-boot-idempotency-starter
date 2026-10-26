@@ -7,16 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-27
+
 ### Added
 
 - `CHANGELOG.md`.
 
 ### Changed
 
+- Spring Boot `4.1.1` → `4.1.2`.
+- Spotless `3.10.2` → `3.10.4` (with reformat for new defaults).
+- `central-publishing-maven-plugin` `0.11.0` → `0.12.0`.
 - README: when-to-use, failure scenarios, hot-path cost, metrics table,
-  testing, demo responses, and a link to the production-like
+  testing, demo responses, badges, and a link to the production-like
   [spring-transactional-outbox-kafka](https://github.com/KHolodilin/spring-transactional-outbox-kafka)
   reference.
+
+[GitHub release](https://github.com/KHolodilin/spring-boot-idempotency-starter/releases/tag/v1.0.1)
 
 ## [1.0.0] - 2026-09-18
 
@@ -105,7 +112,8 @@ Caffeine L1 and Redis L2 (`fail-open` by default).
 - Initial public release: JDBC starter, PostgreSQL persistence,
   Caffeine L1, Redis L2, servlet demo.
 
-[Unreleased]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.3.5...v0.3.6
