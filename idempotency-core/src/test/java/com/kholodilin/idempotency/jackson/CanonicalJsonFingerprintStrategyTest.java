@@ -68,6 +68,20 @@ class CanonicalJsonFingerprintStrategyTest {
     }
 
     @Test
+    void floatDoubleAndBigDecimalNormalizeTheSame() {
+        assertThat(CanonicalJsonFingerprintStrategy.normalize(1.5f))
+                .isEqualTo(CanonicalJsonFingerprintStrategy.normalize(1.5d))
+                .isEqualTo(CanonicalJsonFingerprintStrategy.normalize(new BigDecimal("1.50")));
+    }
+
+    @Test
+    void integerAndLongNormalizeTheSame() {
+        assertThat(CanonicalJsonFingerprintStrategy.normalize(100))
+                .isEqualTo(CanonicalJsonFingerprintStrategy.normalize(100L))
+                .isEqualTo("100");
+    }
+
+    @Test
     void integerAndLongWithSameValueMatch() {
         Map<String, Object> first = Map.of("count", 100);
         Map<String, Object> second = Map.of("count", 100L);

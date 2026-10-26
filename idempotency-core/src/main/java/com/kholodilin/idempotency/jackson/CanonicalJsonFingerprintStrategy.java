@@ -104,7 +104,7 @@ public final class CanonicalJsonFingerprintStrategy implements FingerprintStrate
         }
     }
 
-    private static String normalize(Number number) {
+    static String normalize(Number number) {
         BigDecimal decimal = switch (number) {
             case BigDecimal d -> d;
             case Double d -> BigDecimal.valueOf(d);
