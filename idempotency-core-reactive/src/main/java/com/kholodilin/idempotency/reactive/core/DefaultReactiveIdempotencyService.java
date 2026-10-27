@@ -11,7 +11,6 @@ import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
-import com.kholodilin.idempotency.jackson.Json;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.reactive.ReactiveIdempotencyCall;
@@ -56,8 +55,8 @@ public final class DefaultReactiveIdempotencyService implements ReactiveIdempote
 
     DefaultReactiveIdempotencyService(DefaultReactiveIdempotencyServiceBuilder builder) {
         this.persistenceStore = builder.persistenceStore;
-        this.fingerprintStrategy = builder.fingerprintStrategy;
-        this.serializer = builder.serializer;
+        this.fingerprintStrategy = Objects.requireNonNull(builder.fingerprintStrategy, "fingerprintStrategy");
+        this.serializer = Objects.requireNonNull(builder.serializer, "serializer");
         this.localCache = builder.localCache;
         this.distributedCache = builder.distributedCache;
         this.metrics = builder.metrics;
@@ -201,10 +200,9 @@ public final class DefaultReactiveIdempotencyService implements ReactiveIdempote
                         }));
             }
             case Rejected<RS> rejected -> {
-                String details =
-                        rejected.details().isNull() ? null : rejected.details().toString();
+                String details = rejected.detailsJson();
                 IdempotencyRecord terminal = processing.rejected(rejected.errorCode(), details, completedAt);
-                ExecutionResult<RS> outcome = new Rejected<>(rejected.errorCode(), Json.readTree(details));
+                ExecutionResult<RS> outcome = new Rejected<>(rejected.errorCode(), details);
                 yield persistenceStore
                         .reject(key, rejected.errorCode(), details, completedAt)
                         .then(Mono.defer(() -> {
@@ -266,7 +264,7 @@ public final class DefaultReactiveIdempotencyService implements ReactiveIdempote
             case REJECTED ->
                 new Rejected<>(
                         Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),
-                        Json.readTree(record.resultPayload()));
+                        record.resultPayload());
             case PROCESSING ->
                 throw new IllegalStateException("Unexpected committed PROCESSING record for " + record.key()
                         + "; with the same-transaction persistence model PROCESSING must never be visible");

@@ -1,9 +1,12 @@
 package com.kholodilin.idempotency.demo.controller;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,7 +17,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * both the first execution and replays, because the library makes them indistinguishable.
  */
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class ApiExceptionHandler {
+
+    private final IdempotencySerializer serializer;
 
     /**
      * Business rejection ({@code ExecutionResult.valueOrThrow()}): deterministic outcome,
@@ -22,10 +28,10 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(IdempotencyRejectedException.class)
     public ResponseEntity<?> onRejected(IdempotencyRejectedException e) {
-        return ResponseEntity.unprocessableEntity()
-                .body(Map.of(
-                        "code", e.errorCode(),
-                        "details", e.details()));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", e.errorCode());
+        body.put("details", e.detailsAs(Object.class, serializer));
+        return ResponseEntity.unprocessableEntity().body(body);
     }
 
     /**

@@ -22,6 +22,8 @@ import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.reactive.core.DefaultReactiveIdempotencyService;
 import com.kholodilin.idempotency.reactive.core.DefaultReactiveIdempotencyServiceBuilder;
+import com.kholodilin.idempotency.testsupport.TestFingerprintStrategy;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import io.r2dbc.spi.ConnectionFactories;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryOptions;
@@ -104,6 +106,8 @@ class PostgresReactiveIdempotencyIntegrationTest {
                 .block();
         store = new R2dbcPersistenceStore(databaseClient, "idempotency_records");
         service = new DefaultReactiveIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .persistenceTtl(Duration.ofHours(24))
                 .build();
@@ -256,8 +260,10 @@ class PostgresReactiveIdempotencyIntegrationTest {
                         .request(command)
                         .execute(
                                 PaymentResult.class,
-                                () -> Mono.just(
-                                        ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200)))))
+                                () -> Mono.just(ExecutionResult.rejected(
+                                        "INSUFFICIENT_FUNDS",
+                                        new Details(1500, 200),
+                                        new TestIdempotencySerializer()))))
                 .block();
 
         ExecutionResult<PaymentResult> replayed = tx.transactional(service.operation("CREATE_PAYMENT")
@@ -266,10 +272,13 @@ class PostgresReactiveIdempotencyIntegrationTest {
                         .execute(PaymentResult.class, () -> Mono.error(new AssertionError("replay"))))
                 .block();
 
-        assertThat(replayed).isEqualTo(first);
+        Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
         Rejected<PaymentResult> rejected = (Rejected<PaymentResult>) replayed;
-        assertThat(rejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
-        assertThat(rejected.details().get("amount").asLong()).isEqualTo(1500);
+        assertThat(rejected.errorCode()).isEqualTo(firstRejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
+        TestIdempotencySerializer serializer = new TestIdempotencySerializer();
+        assertThat(rejected.detailsAs(Details.class, serializer))
+                .isEqualTo(firstRejected.detailsAs(Details.class, serializer))
+                .isEqualTo(new Details(1500, 200));
     }
 
     @Test

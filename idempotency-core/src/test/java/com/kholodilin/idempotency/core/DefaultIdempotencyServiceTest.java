@@ -24,6 +24,8 @@ import com.kholodilin.idempotency.spi.TransactionContext;
 import com.kholodilin.idempotency.testsupport.InMemoryCache;
 import com.kholodilin.idempotency.testsupport.InMemoryPersistenceCleanup;
 import com.kholodilin.idempotency.testsupport.InMemoryStore;
+import com.kholodilin.idempotency.testsupport.TestFingerprintStrategy;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,7 +56,11 @@ class DefaultIdempotencyServiceTest {
     private final AtomicInteger actionCalls = new AtomicInteger();
 
     private DefaultIdempotencyServiceBuilder serviceBuilder() {
-        return new DefaultIdempotencyServiceBuilder(store).clock(clock).requireActiveTransaction(false);
+        return new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
+                .clock(clock)
+                .requireActiveTransaction(false);
     }
 
     private ExecutionResult<PaymentResult> countingAction() {
@@ -108,7 +114,8 @@ class DefaultIdempotencyServiceTest {
                 .request(command)
                 .execute(
                         PaymentResult.class,
-                        () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200)));
+                        () -> ExecutionResult.rejected(
+                                "INSUFFICIENT_FUNDS", new Details(1500, 200), new TestIdempotencySerializer()));
 
         ExecutionResult<PaymentResult> replayed = service.operation(OPERATION)
                 .key(KEY)
@@ -121,8 +128,9 @@ class DefaultIdempotencyServiceTest {
         Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
         Rejected<PaymentResult> replayedRejected = (Rejected<PaymentResult>) replayed;
         assertThat(replayedRejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
-        assertThat(replayedRejected.details()).isEqualTo(firstRejected.details());
-        assertThat(replayedRejected.detailsAs(Details.class)).isEqualTo(new Details(1500, 200));
+        assertThat(replayedRejected.detailsJson()).isEqualTo(firstRejected.detailsJson());
+        assertThat(replayedRejected.detailsAs(Details.class, new TestIdempotencySerializer()))
+                .isEqualTo(new Details(1500, 200));
     }
 
     @Test
@@ -207,6 +215,8 @@ class DefaultIdempotencyServiceTest {
             }
         };
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .transactionContext(inactive)
                 .build();
@@ -440,6 +450,8 @@ class DefaultIdempotencyServiceTest {
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -463,6 +475,8 @@ class DefaultIdempotencyServiceTest {
                 .thenReturn(true); // concurrent transaction rolled back, second attempt wins
 
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -484,6 +498,8 @@ class DefaultIdempotencyServiceTest {
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(false);
 
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(racingStore)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -538,7 +554,7 @@ class DefaultIdempotencyServiceTest {
     void builderAcceptsCustomFingerprintAndSerializer() {
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
                 .fingerprintStrategy(request -> "fixed-hash")
-                .serializer(new com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer())
+                .serializer(new TestIdempotencySerializer())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -561,6 +577,8 @@ class DefaultIdempotencyServiceTest {
     @Test
     void activeImmediateTransactionSatisfiesRequireActiveTransaction() {
         DefaultIdempotencyService service = new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .transactionContext(TransactionContext.IMMEDIATE)
                 .requireActiveTransaction(true)
@@ -766,8 +784,7 @@ class DefaultIdempotencyServiceTest {
     private IdempotencyRecord completedRecord() {
         DefaultIdempotencyService probe = serviceBuilder().build();
         // fingerprint must match what the service calculates for `command`
-        String fingerprint =
-                new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy().calculate(command);
+        String fingerprint = new TestFingerprintStrategy().calculate(command);
         return IdempotencyRecord.processing(new IdempotencyKey(OPERATION, KEY), fingerprint, NOW.minusSeconds(60), null)
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"pay-42\"}", NOW.minusSeconds(60));
     }

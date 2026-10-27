@@ -1,7 +1,5 @@
 package com.kholodilin.idempotency.reactive.autoconfigure;
 
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.reactive.ReactiveIdempotencyService;
 import com.kholodilin.idempotency.reactive.core.DefaultReactiveIdempotencyServiceBuilder;
 import com.kholodilin.idempotency.reactive.spi.ReactiveDistributedCache;
@@ -20,12 +18,13 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * Core auto-configuration: default {@link FingerprintStrategy}, {@link IdempotencySerializer}
- * and the {@link ReactiveIdempotencyService} itself. Every default backs off when the
- * application provides its own bean of the same SPI type.
+ * Core auto-configuration for the {@link ReactiveIdempotencyService}. Default
+ * {@link FingerprintStrategy} / {@link IdempotencySerializer} live in
+ * {@link IdempotencyJacksonAutoConfiguration}.
  */
 @AutoConfiguration(
         after = {
+            IdempotencyJacksonAutoConfiguration.class,
             IdempotencyR2dbcAutoConfiguration.class,
             IdempotencyCaffeineAutoConfiguration.class,
             IdempotencyRedisAutoConfiguration.class,
@@ -34,18 +33,6 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnProperty(name = "idempotency.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public FingerprintStrategy idempotencyFingerprintStrategy(IdempotencyProperties properties) {
-        return new CanonicalJsonFingerprintStrategy(properties.getFingerprint().getAlgorithm());
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public IdempotencySerializer idempotencySerializer() {
-        return new JacksonIdempotencySerializer();
-    }
 
     @Bean
     @ConditionalOnMissingBean

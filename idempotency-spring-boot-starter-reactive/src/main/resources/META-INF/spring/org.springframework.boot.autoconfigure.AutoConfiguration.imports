@@ -1,3 +1,4 @@
+com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyJacksonAutoConfiguration
 com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyR2dbcAutoConfiguration
 com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyCaffeineAutoConfiguration
 com.kholodilin.idempotency.reactive.autoconfigure.IdempotencyRedisAutoConfiguration

@@ -4,10 +4,8 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import com.kholodilin.idempotency.exception.IdempotencyRejectedException;
-import com.kholodilin.idempotency.jackson.Json;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import org.jspecify.annotations.Nullable;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.NullNode;
 
 /**
  * Outcome of an idempotent business operation.
@@ -18,9 +16,9 @@ import tools.jackson.databind.node.NullNode;
  * definition a technical failure: the transaction is rolled back and the exception is
  * rethrown, so a later retry can execute the operation from scratch.
  *
- * <p>Rejection details are always carried as a {@link JsonNode}, both on the first
+ * <p>Rejection details are carried as JSON text ({@link String}), both on the first
  * execution and on replay, so the two are indistinguishable for the caller. Use
- * {@link Rejected#detailsAs(Class)} for typed access.
+ * {@link Rejected#detailsAs(Class, IdempotencySerializer)} for typed access.
  *
  * @param <RS> successful result type
  */
@@ -34,22 +32,27 @@ public sealed interface ExecutionResult<RS> permits ExecutionResult.Success, Exe
 
     /**
      * Deterministic business rejection outcome.
+     *
+     * @param errorCode   stable business error code
+     * @param detailsJson JSON text with rejection details, or {@code null} when absent
      */
-    record Rejected<RS>(String errorCode, JsonNode details) implements ExecutionResult<RS> {
+    record Rejected<RS>(String errorCode, @Nullable String detailsJson) implements ExecutionResult<RS> {
 
         public Rejected {
             Objects.requireNonNull(errorCode, "errorCode");
-            if (details == null) {
-                details = NullNode.getInstance();
-            }
         }
 
         /**
          * Converts the rejection details into the given type. Different error codes may
          * use different detail types; pick the class based on {@link #errorCode()}.
          */
-        public <T> @Nullable T detailsAs(Class<T> type) {
-            return Json.treeToValue(details, type);
+        public <T> @Nullable T detailsAs(Class<T> type, IdempotencySerializer serializer) {
+            Objects.requireNonNull(type, "type");
+            Objects.requireNonNull(serializer, "serializer");
+            if (detailsJson == null) {
+                return null;
+            }
+            return serializer.deserialize(detailsJson, type);
         }
     }
 
@@ -57,16 +60,31 @@ public sealed interface ExecutionResult<RS> permits ExecutionResult.Success, Exe
         return new Success<>(value);
     }
 
+    /**
+     * Creates a rejection outcome without details ({@code detailsJson} is {@code null}).
+     */
     static <RS> ExecutionResult<RS> rejected(String errorCode) {
-        return new Rejected<>(errorCode, NullNode.getInstance());
+        return new Rejected<>(errorCode, null);
     }
 
     /**
-     * Creates a rejection outcome. {@code details} is converted to a {@link JsonNode}
-     * immediately so that the first execution and a replay return the identical shape.
+     * Creates a rejection outcome with pre-serialized JSON details.
      */
-    static <RS> ExecutionResult<RS> rejected(String errorCode, @Nullable Object details) {
-        return new Rejected<>(errorCode, Json.valueToTree(details));
+    static <RS> ExecutionResult<RS> rejected(String errorCode, @Nullable String detailsJson) {
+        return new Rejected<>(errorCode, detailsJson);
+    }
+
+    /**
+     * Creates a rejection outcome. {@code details} is serialized immediately so that the
+     * first execution and a replay return the identical JSON text. A {@code null}
+     * {@code details} value yields {@code null} {@code detailsJson} (serializer is not
+     * invoked).
+     */
+    static <RS> ExecutionResult<RS> rejected(
+            String errorCode, @Nullable Object details, IdempotencySerializer serializer) {
+        Objects.requireNonNull(serializer, "serializer");
+        String detailsJson = details == null ? null : serializer.serialize(details);
+        return new Rejected<>(errorCode, detailsJson);
     }
 
     /**
@@ -80,7 +98,7 @@ public sealed interface ExecutionResult<RS> permits ExecutionResult.Success, Exe
     default @Nullable RS valueOrThrow() {
         return switch (this) {
             case Success<RS> s -> s.value();
-            case Rejected<RS> r -> throw new IdempotencyRejectedException(r.errorCode(), r.details());
+            case Rejected<RS> r -> throw new IdempotencyRejectedException(r.errorCode(), r.detailsJson());
         };
     }
 

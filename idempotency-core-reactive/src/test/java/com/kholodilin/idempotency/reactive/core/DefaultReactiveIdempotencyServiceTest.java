@@ -16,7 +16,6 @@ import com.kholodilin.idempotency.ExecutionResult.Rejected;
 import com.kholodilin.idempotency.ExecutionResult.Success;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
@@ -26,6 +25,8 @@ import com.kholodilin.idempotency.reactive.testsupport.InMemoryReactiveDistribut
 import com.kholodilin.idempotency.reactive.testsupport.InMemoryReactiveStore;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
 import com.kholodilin.idempotency.testsupport.InMemoryCache;
+import com.kholodilin.idempotency.testsupport.TestFingerprintStrategy;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -58,7 +59,11 @@ class DefaultReactiveIdempotencyServiceTest {
     private final AtomicInteger actionCalls = new AtomicInteger();
 
     private DefaultReactiveIdempotencyServiceBuilder serviceBuilder() {
-        return new DefaultReactiveIdempotencyServiceBuilder(store).clock(clock).requireActiveTransaction(false);
+        return new DefaultReactiveIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
+                .clock(clock)
+                .requireActiveTransaction(false);
     }
 
     private Mono<ExecutionResult<PaymentResult>> countingAction() {
@@ -115,7 +120,8 @@ class DefaultReactiveIdempotencyServiceTest {
                 .request(command)
                 .execute(
                         PaymentResult.class,
-                        () -> Mono.just(ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200))))
+                        () -> Mono.just(ExecutionResult.rejected(
+                                "INSUFFICIENT_FUNDS", new Details(1500, 200), new TestIdempotencySerializer())))
                 .block();
 
         ExecutionResult<PaymentResult> replayed = service.operation(OPERATION)
@@ -129,8 +135,9 @@ class DefaultReactiveIdempotencyServiceTest {
         Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
         Rejected<PaymentResult> replayedRejected = (Rejected<PaymentResult>) replayed;
         assertThat(replayedRejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
-        assertThat(replayedRejected.details()).isEqualTo(firstRejected.details());
-        assertThat(replayedRejected.detailsAs(Details.class)).isEqualTo(new Details(1500, 200));
+        assertThat(replayedRejected.detailsJson()).isEqualTo(firstRejected.detailsJson());
+        assertThat(replayedRejected.detailsAs(Details.class, new TestIdempotencySerializer()))
+                .isEqualTo(new Details(1500, 200));
     }
 
     @Test
@@ -229,6 +236,8 @@ class DefaultReactiveIdempotencyServiceTest {
             }
         };
         DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .transactionContext(inactive)
                 .build();
@@ -470,6 +479,8 @@ class DefaultReactiveIdempotencyServiceTest {
     @Test
     void activeImmediateTransactionSatisfiesRequireActiveTransaction() {
         DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .transactionContext(ReactiveTransactionContext.IMMEDIATE)
                 .requireActiveTransaction(true)
@@ -529,6 +540,8 @@ class DefaultReactiveIdempotencyServiceTest {
         when(racingStore.complete(any(), any(), any(), any())).thenReturn(Mono.empty());
 
         DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(racingStore)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -550,6 +563,8 @@ class DefaultReactiveIdempotencyServiceTest {
         when(racingStore.acquire(any(), any(), any(), any())).thenReturn(Mono.just(false));
 
         DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(racingStore)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -569,7 +584,7 @@ class DefaultReactiveIdempotencyServiceTest {
     void builderAcceptsCustomFingerprintAndSerializer() {
         DefaultReactiveIdempotencyService service = new DefaultReactiveIdempotencyServiceBuilder(store)
                 .fingerprintStrategy(request -> "fixed-hash")
-                .serializer(new JacksonIdempotencySerializer())
+                .serializer(new TestIdempotencySerializer())
                 .clock(clock)
                 .requireActiveTransaction(false)
                 .build();
@@ -655,7 +670,7 @@ class DefaultReactiveIdempotencyServiceTest {
     private IdempotencyRecord seedCompletedRecord() {
         return IdempotencyRecord.processing(
                         new IdempotencyKey(OPERATION, KEY),
-                        new com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy().calculate(command),
+                        new TestFingerprintStrategy().calculate(command),
                         NOW.minusSeconds(60),
                         null)
                 .completed(PaymentResult.class.getName(), "{\"paymentId\":\"pay-42\"}", NOW);

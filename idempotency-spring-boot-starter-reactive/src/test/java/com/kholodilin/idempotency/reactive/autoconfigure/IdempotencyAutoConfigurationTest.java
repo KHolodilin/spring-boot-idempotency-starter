@@ -39,6 +39,7 @@ class IdempotencyAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
+                    IdempotencyJacksonAutoConfiguration.class,
                     IdempotencyR2dbcAutoConfiguration.class,
                     IdempotencyCaffeineAutoConfiguration.class,
                     IdempotencyRedisAutoConfiguration.class,

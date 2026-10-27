@@ -5,6 +5,7 @@ import java.util.Locale;
 import com.kholodilin.idempotency.redis.RedisCacheFailurePolicy;
 import com.kholodilin.idempotency.redis.RedisDistributedCache;
 import com.kholodilin.idempotency.spi.DistributedCache;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -20,6 +21,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
  * {@link RedisConnectionFactory} bean is available.
  */
 @AutoConfiguration(
+        after = IdempotencyJacksonAutoConfiguration.class,
         afterName = {
             // Spring Boot 4.x
             "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration",
@@ -27,7 +29,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
             "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
         })
 @ConditionalOnClass({RedisDistributedCache.class, RedisConnectionFactory.class})
-@ConditionalOnBean(RedisConnectionFactory.class)
+@ConditionalOnBean({RedisConnectionFactory.class, IdempotencySerializer.class})
 @ConditionalOnProperty(name = "idempotency.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyRedisAutoConfiguration {
@@ -36,10 +38,12 @@ public class IdempotencyRedisAutoConfiguration {
     @ConditionalOnMissingBean(DistributedCache.class)
     @ConditionalOnProperty(name = "idempotency.distributed-cache.enabled", matchIfMissing = true)
     public RedisDistributedCache redisIdempotencyDistributedCache(
-            RedisConnectionFactory connectionFactory, IdempotencyProperties properties) {
+            RedisConnectionFactory connectionFactory,
+            IdempotencyProperties properties,
+            IdempotencySerializer serializer) {
         IdempotencyProperties.DistributedCacheSettings config = properties.getDistributedCache();
         RedisCacheFailurePolicy policy = RedisCacheFailurePolicy.valueOf(
                 config.getFailurePolicy().toUpperCase(Locale.ROOT).replace('-', '_'));
-        return new RedisDistributedCache(connectionFactory, config.getKeyPrefix(), config.getTtl(), policy);
+        return new RedisDistributedCache(connectionFactory, config.getKeyPrefix(), config.getTtl(), policy, serializer);
     }
 }

@@ -4,8 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Objects;
 
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.FingerprintStrategy;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
@@ -18,14 +16,17 @@ import org.jspecify.annotations.Nullable;
 /**
  * Fluent builder for {@link DefaultIdempotencyService}.
  *
- * <p>Only {@link PersistenceStore} is required; everything else has defaults suitable
- * for tests and non-Spring usage.
+ * <p>{@link PersistenceStore}, {@link FingerprintStrategy} and {@link IdempotencySerializer}
+ * are required. Jackson-based defaults live in {@code idempotency-jackson3} and must be
+ * supplied explicitly (or via Spring Boot auto-configuration).
  */
 public final class DefaultIdempotencyServiceBuilder {
 
     final PersistenceStore persistenceStore;
-    FingerprintStrategy fingerprintStrategy = new CanonicalJsonFingerprintStrategy();
-    IdempotencySerializer serializer = new JacksonIdempotencySerializer();
+
+    @Nullable FingerprintStrategy fingerprintStrategy;
+
+    @Nullable IdempotencySerializer serializer;
 
     @Nullable LocalCache localCache;
 
@@ -47,12 +48,12 @@ public final class DefaultIdempotencyServiceBuilder {
     }
 
     public DefaultIdempotencyServiceBuilder fingerprintStrategy(FingerprintStrategy fingerprintStrategy) {
-        this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy);
+        this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy, "fingerprintStrategy");
         return this;
     }
 
     public DefaultIdempotencyServiceBuilder serializer(IdempotencySerializer serializer) {
-        this.serializer = Objects.requireNonNull(serializer);
+        this.serializer = Objects.requireNonNull(serializer, "serializer");
         return this;
     }
 
@@ -109,6 +110,8 @@ public final class DefaultIdempotencyServiceBuilder {
     }
 
     public DefaultIdempotencyService build() {
+        Objects.requireNonNull(fingerprintStrategy, "fingerprintStrategy");
+        Objects.requireNonNull(serializer, "serializer");
         return new DefaultIdempotencyService(this);
     }
 }

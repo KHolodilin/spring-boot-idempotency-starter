@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import org.junit.jupiter.api.AfterAll;
@@ -74,7 +75,7 @@ class RedisDistributedCacheIntegrationTest {
 
     @Test
     void putGetEvictRoundTripPreservesAllFields() {
-        RedisDistributedCache cache = new RedisDistributedCache(factory);
+        RedisDistributedCache cache = new RedisDistributedCache(factory, new TestIdempotencySerializer());
         IdempotencyRecord record = completedRecord("rt-1");
         IdempotencyKey key = record.key();
 
@@ -90,7 +91,7 @@ class RedisDistributedCacheIntegrationTest {
 
     @Test
     void rejectedRecordRoundTrips() {
-        RedisDistributedCache cache = new RedisDistributedCache(factory);
+        RedisDistributedCache cache = new RedisDistributedCache(factory, new TestIdempotencySerializer());
         IdempotencyRecord rejected = IdempotencyRecord.processing(
                         new IdempotencyKey("CREATE_PAYMENT", "rt-2"), "hash-2", NOW, null)
                 .rejected("INSUFFICIENT_FUNDS", "{\"amount\":1500,\"balance\":200}", NOW.plusSeconds(1));
@@ -106,7 +107,11 @@ class RedisDistributedCacheIntegrationTest {
     @Test
     void keysUseConfiguredPrefixAndOperation() {
         RedisDistributedCache cache = new RedisDistributedCache(
-                factory, "custom-prefix:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
+                factory,
+                "custom-prefix:",
+                Duration.ofMinutes(5),
+                RedisCacheFailurePolicy.FAIL_OPEN,
+                new TestIdempotencySerializer());
         IdempotencyRecord record = completedRecord("key-fmt");
 
         cache.put(record.key(), record);
@@ -117,7 +122,11 @@ class RedisDistributedCacheIntegrationTest {
     @Test
     void ttlIsAppliedToStoredEntries() {
         RedisDistributedCache cache = new RedisDistributedCache(
-                factory, "ttl-test:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
+                factory,
+                "ttl-test:",
+                Duration.ofMinutes(5),
+                RedisCacheFailurePolicy.FAIL_OPEN,
+                new TestIdempotencySerializer());
         IdempotencyRecord record = completedRecord("ttl-1");
 
         cache.put(record.key(), record);
@@ -128,8 +137,12 @@ class RedisDistributedCacheIntegrationTest {
 
     @Test
     void failOpenSwallowsRedisFailures() {
-        RedisDistributedCache cache =
-                new RedisDistributedCache(deadFactory, "x:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
+        RedisDistributedCache cache = new RedisDistributedCache(
+                deadFactory,
+                "x:",
+                Duration.ofMinutes(5),
+                RedisCacheFailurePolicy.FAIL_OPEN,
+                new TestIdempotencySerializer());
         IdempotencyRecord record = completedRecord("dead-1");
 
         assertThatCode(() -> {
@@ -144,8 +157,12 @@ class RedisDistributedCacheIntegrationTest {
 
     @Test
     void failFastPropagatesRedisFailures() {
-        RedisDistributedCache cache =
-                new RedisDistributedCache(deadFactory, "x:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_FAST);
+        RedisDistributedCache cache = new RedisDistributedCache(
+                deadFactory,
+                "x:",
+                Duration.ofMinutes(5),
+                RedisCacheFailurePolicy.FAIL_FAST,
+                new TestIdempotencySerializer());
 
         assertThatThrownBy(() -> cache.get(new IdempotencyKey("CREATE_PAYMENT", "dead-2")))
                 .isInstanceOf(RedisConnectionFailureException.class);

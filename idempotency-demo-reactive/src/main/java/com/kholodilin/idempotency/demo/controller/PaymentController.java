@@ -1,11 +1,13 @@
 package com.kholodilin.idempotency.demo.controller;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.kholodilin.idempotency.demo.model.CreatePaymentRequest;
 import com.kholodilin.idempotency.demo.model.PaymentResult;
 import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.service.PaymentService;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import reactor.core.publisher.Mono;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final IdempotencySerializer serializer;
 
     /**
      * Primary style: {@code valueOrThrow()} unwraps the outcome outside the transaction;
@@ -45,11 +48,11 @@ public class PaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody RefundRequest request) {
         return paymentService
                 .refund(idempotencyKey, request)
-                .map(result -> result.fold(
-                        ResponseEntity::ok,
-                        rejected -> ResponseEntity.unprocessableEntity()
-                                .body(Map.of(
-                                        "code", rejected.errorCode(),
-                                        "details", rejected.details()))));
+                .map(result -> result.fold(ResponseEntity::ok, rejected -> {
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("code", rejected.errorCode());
+                    body.put("details", rejected.detailsAs(Object.class, serializer));
+                    return ResponseEntity.unprocessableEntity().body(body);
+                }));
     }
 }

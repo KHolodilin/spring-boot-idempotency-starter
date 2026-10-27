@@ -16,7 +16,6 @@ import com.kholodilin.idempotency.IdempotencyCall;
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.exception.MissingTransactionException;
-import com.kholodilin.idempotency.jackson.Json;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.spi.DistributedCache;
@@ -58,8 +57,8 @@ public final class DefaultIdempotencyService implements IdempotencyService {
 
     DefaultIdempotencyService(DefaultIdempotencyServiceBuilder builder) {
         this.persistenceStore = builder.persistenceStore;
-        this.fingerprintStrategy = builder.fingerprintStrategy;
-        this.serializer = builder.serializer;
+        this.fingerprintStrategy = Objects.requireNonNull(builder.fingerprintStrategy, "fingerprintStrategy");
+        this.serializer = Objects.requireNonNull(builder.serializer, "serializer");
         this.localCache = builder.localCache;
         this.distributedCache = builder.distributedCache;
         this.metrics = builder.metrics;
@@ -164,14 +163,11 @@ public final class DefaultIdempotencyService implements IdempotencyService {
                 outcome = success;
             }
             case Rejected<RS> rejected -> {
-                String details =
-                        rejected.details().isNull() ? null : rejected.details().toString();
+                String details = rejected.detailsJson();
                 persistenceStore.reject(key, rejected.errorCode(), details, completedAt);
                 terminal = processing.rejected(rejected.errorCode(), details, completedAt);
-                // Normalize the returned tree through the same serialize/parse round trip a
-                // replay goes through, so the first execution and a replay are identical
-                // (e.g. numeric node types differ between valueToTree and readTree).
-                outcome = new Rejected<>(rejected.errorCode(), Json.readTree(details));
+                // Keep detailsJson as-is so the first execution matches a replay string-for-string.
+                outcome = new Rejected<>(rejected.errorCode(), details);
             }
         }
 
@@ -227,7 +223,7 @@ public final class DefaultIdempotencyService implements IdempotencyService {
             case REJECTED ->
                 new Rejected<>(
                         Objects.requireNonNull(record.errorCode(), "errorCode of a REJECTED record"),
-                        Json.readTree(record.resultPayload()));
+                        record.resultPayload());
             case PROCESSING ->
                 throw new IllegalStateException("Unexpected committed PROCESSING record for " + record.key()
                         + "; with the same-transaction persistence model PROCESSING must never be visible");

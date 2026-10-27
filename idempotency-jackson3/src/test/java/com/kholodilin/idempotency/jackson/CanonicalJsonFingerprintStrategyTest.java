@@ -147,4 +147,27 @@ class CanonicalJsonFingerprintStrategyTest {
         assertThatThrownBy(() -> new CanonicalJsonFingerprintStrategy("NO-SUCH-ALGO"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void booleanAndEmptyArrayAreCanonicalized() {
+        assertThat(strategy.canonicalize(Json.valueToTree(Map.of("ok", true, "items", List.of()))))
+                .isEqualTo("{\"items\":[],\"ok\":true}");
+    }
+
+    @Test
+    void controlCharactersAndCommonEscapesAreEncoded() {
+        String withControls = "a\b\f\r" + ((char) 0x01);
+        String canonical = strategy.canonicalize(Json.valueToTree(Map.of("s", withControls)));
+
+        assertThat(canonical).isEqualTo("{\"s\":\"a\\b\\f\\r\\u0001\"}");
+    }
+
+    @Test
+    void binaryNodeFallsBackToJacksonToString() {
+        byte[] bytes = new byte[] {1, 2, 3};
+        String canonical = strategy.canonicalize(Json.mapper().getNodeFactory().binaryNode(bytes));
+
+        assertThat(canonical)
+                .isEqualTo(Json.mapper().getNodeFactory().binaryNode(bytes).toString());
+    }
 }
