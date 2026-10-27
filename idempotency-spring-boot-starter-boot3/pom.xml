@@ -13,7 +13,7 @@
 
     <artifactId>spring-boot-idempotency-starter-boot3</artifactId>
     <name>Spring Boot Idempotency Starter (Boot 3.2+)</name>
-    <description>Auto-configuration for transactional idempotency on Spring Boot 3.2+ (Jackson 2).</description>
+    <description>Fluent API and auto-configuration for transactional idempotency on Spring Boot 3.2+ (Jackson 2): JDBC/PostgreSQL with optional Caffeine and Redis caching for retry-safe operations across HTTP, Kafka, and more.</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
     <scm>
         <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>
