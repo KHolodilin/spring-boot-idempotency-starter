@@ -144,6 +144,26 @@ class CanonicalJsonFingerprintStrategyTest {
     }
 
     @Test
+    void backslashIsEscapedDeterministically() {
+        String canonical = strategy.canonicalize(Json.valueToTree(Map.of("s", "a\\b")));
+
+        assertThat(canonical).isEqualTo("{\"s\":\"a\\\\b\"}");
+    }
+
+    @Test
+    void digestFailureIsIllegalStateWhenAlgorithmDisappears() throws Exception {
+        CanonicalJsonFingerprintStrategy custom = new CanonicalJsonFingerprintStrategy("SHA-256");
+        var algorithm = CanonicalJsonFingerprintStrategy.class.getDeclaredField("algorithm");
+        algorithm.setAccessible(true);
+        algorithm.set(custom, "NO-SUCH-ALGO");
+
+        assertThatThrownBy(() -> custom.calculate(Map.of("a", 1)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Digest algorithm disappeared")
+                .hasCauseInstanceOf(java.security.NoSuchAlgorithmException.class);
+    }
+
+    @Test
     void fingerprintIsSha256Hex() {
         assertThat(strategy.calculate(Map.of("a", 1))).matches("[0-9a-f]{64}");
     }
