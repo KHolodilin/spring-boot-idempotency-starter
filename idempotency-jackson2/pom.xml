@@ -32,11 +32,12 @@
             <version>1.0.1</version>
         </dependency>
         <!-- Boot 4 BOM manages Jackson 3 (tools.jackson); pin Jackson 2 for this module.
-             Boot 3 starters re-import Boot 3 BOM and override the runtime version. -->
+             Align with Boot 3.5.x BOM (boot3-latest). Boot 3 starters still re-import their
+             Boot 3 BOM and manage the runtime Jackson version for consumers. -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.4</version>
+            <version>2.21.4</version>
         </dependency>
 
         <dependency>
