@@ -5,6 +5,35 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    exclude-paths:
+      - "idempotency-spring-boot-starter-boot3/**"
+      - "idempotency-spring-boot-starter-reactive-boot3/**"
+    groups:
+      spring-boot4:
+        patterns:
+          - "org.springframework.boot*"
+
+  - package-ecosystem: maven
+    directory: "/idempotency-spring-boot-starter-boot3"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      spring-boot3:
+        patterns:
+          - "org.springframework.boot*"
+          - "com.fasterxml.jackson*"
+
+  - package-ecosystem: maven
+    directory: "/idempotency-spring-boot-starter-reactive-boot3"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      spring-boot3:
+        patterns:
+          - "org.springframework.boot*"
+          - "com.fasterxml.jackson*"
 
   - package-ecosystem: github-actions
     directory: "/"

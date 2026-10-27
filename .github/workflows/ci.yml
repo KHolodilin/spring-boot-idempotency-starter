@@ -28,6 +28,18 @@ jobs:
       - name: Build and verify
         run: mvn -B -ntp clean verify
 
+      - name: Verify Boot 3 servlet starter on 3.4
+        run: mvn -B -ntp verify -pl idempotency-spring-boot-starter-boot3 -am -P boot3-34
+
+      - name: Verify Boot 3 reactive starter on 3.4
+        run: mvn -B -ntp verify -pl idempotency-spring-boot-starter-reactive-boot3 -am -P boot3-34
+
+      - name: Verify Boot 3 servlet starter on latest 3.x
+        run: mvn -B -ntp verify -pl idempotency-spring-boot-starter-boot3 -am -P boot3-latest
+
+      - name: Verify Boot 3 reactive starter on latest 3.x
+        run: mvn -B -ntp verify -pl idempotency-spring-boot-starter-reactive-boot3 -am -P boot3-latest
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:

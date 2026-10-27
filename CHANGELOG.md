@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - Unreleased
+
+### Added
+
+- Spring Boot **3.2+** starters: `spring-boot-idempotency-starter-boot3`
+  (servlet/JDBC) and `spring-boot-idempotency-starter-reactive-boot3`
+  (WebFlux/R2DBC), with Jackson 2 via `idempotency-jackson2`.
+- `idempotency-jackson3` for Boot 4 starters (Jackson 3).
+- CI profiles `boot3-34` and `boot3-latest` for both Boot 3 starters.
+
+### Changed / Breaking
+
+Staying on the **1.x** line intentionally; these are API breaks for
+manual wiring and custom SPI use (starter auto-config covers the common
+path).
+
+- `ExecutionResult.Rejected` and `IdempotencyRejectedException`: Jackson
+  `JsonNode` details → `detailsJson` (`String`); typed access via
+  `detailsAs(Class, IdempotencySerializer)`.
+- `DefaultIdempotencyServiceBuilder` /
+  `DefaultReactiveIdempotencyServiceBuilder` require an explicit
+  `IdempotencySerializer` and `FingerprintStrategy` (no Jackson defaults
+  in core).
+- Jackson removed from `idempotency-core`: Boot 4 uses
+  `idempotency-jackson3`, Boot 3 uses `idempotency-jackson2`.
+- Redis cache modules require an injected `IdempotencySerializer`.
+
 ## [1.0.1] - 2026-10-27
 
 ### Added
@@ -113,6 +140,7 @@ Caffeine L1 and Redis L2 (`fail-open` by default).
   Caffeine L1, Redis L2, servlet demo.
 
 [Unreleased]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...HEAD
+[1.2.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...HEAD
 [1.0.1]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.3.6...v0.4.0
