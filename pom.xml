@@ -48,6 +48,7 @@
         <module>idempotency-core</module>
         <module>idempotency-core-reactive</module>
         <module>idempotency-jackson3</module>
+        <module>idempotency-jackson2</module>
         <module>idempotency-persistence-jdbc</module>
         <module>idempotency-persistence-r2dbc</module>
         <module>idempotency-local-cache-caffeine</module>
@@ -55,6 +56,8 @@
         <module>idempotency-distributed-cache-redis-reactive</module>
         <module>idempotency-spring-boot-starter</module>
         <module>idempotency-spring-boot-starter-reactive</module>
+        <module>idempotency-spring-boot-starter-boot3</module>
+        <module>idempotency-spring-boot-starter-reactive-boot3</module>
         <module>idempotency-demo</module>
         <module>idempotency-demo-reactive</module>
     </modules>
@@ -137,6 +140,11 @@
             </dependency>
             <dependency>
                 <groupId>com.kholodilin</groupId>
+                <artifactId>idempotency-jackson2</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
                 <artifactId>idempotency-persistence-r2dbc</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -153,6 +161,16 @@
             <dependency>
                 <groupId>com.kholodilin</groupId>
                 <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
+                <artifactId>spring-boot-idempotency-starter-boot3</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.kholodilin</groupId>
+                <artifactId>spring-boot-idempotency-starter-reactive-boot3</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
