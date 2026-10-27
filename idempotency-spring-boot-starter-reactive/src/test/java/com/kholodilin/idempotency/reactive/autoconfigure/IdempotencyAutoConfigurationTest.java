@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.Optional;
 
 import com.kholodilin.idempotency.caffeine.CaffeineLocalCache;
+import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
+import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.r2dbc.R2dbcIdempotencyPersistenceCleanup;
@@ -81,6 +83,38 @@ class IdempotencyAutoConfigurationTest {
             assertThat(context.getBean(ReactiveTransactionContext.class))
                     .isInstanceOf(SpringReactiveTransactionContext.class);
         });
+    }
+
+    @Test
+    void defaultsAreJacksonSerializerAndCanonicalFingerprint() {
+        withConnectionFactory().run(context -> {
+            assertThat(context.getBean(IdempotencySerializer.class)).isInstanceOf(JacksonIdempotencySerializer.class);
+            assertThat(context.getBean(FingerprintStrategy.class)).isInstanceOf(CanonicalJsonFingerprintStrategy.class);
+        });
+    }
+
+    @Test
+    void customSerializerTakesPrecedence() {
+        withConnectionFactory()
+                .withUserConfiguration(CustomSerializerConfiguration.class)
+                .run(context -> {
+                    assertThat(context.getBean(IdempotencySerializer.class))
+                            .isSameAs(context.getBean(CustomSerializerConfiguration.class).serializer);
+                    assertThat(context).doesNotHaveBean(JacksonIdempotencySerializer.class);
+                });
+    }
+
+    @Test
+    void fingerprintAlgorithmPropertyIsAppliedByDefaultBean() {
+        record Payload(String orderId, int amount) {}
+        Payload payload = new Payload("o-1", 42);
+        String expected = new CanonicalJsonFingerprintStrategy("SHA-512").calculate(payload);
+
+        withConnectionFactory()
+                .withPropertyValues("idempotency.fingerprint.algorithm=SHA-512")
+                .run(context -> assertThat(
+                                context.getBean(FingerprintStrategy.class).calculate(payload))
+                        .isEqualTo(expected));
     }
 
     @Test
@@ -259,6 +293,27 @@ class IdempotencyAutoConfigurationTest {
         @Bean
         ReactivePersistenceStore customStore() {
             return store;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class CustomSerializerConfiguration {
+
+        final IdempotencySerializer serializer = new IdempotencySerializer() {
+            @Override
+            public String serialize(Object value) {
+                return String.valueOf(value);
+            }
+
+            @Override
+            public <T> T deserialize(String value, Class<T> type) {
+                return null;
+            }
+        };
+
+        @Bean
+        IdempotencySerializer customSerializer() {
+            return serializer;
         }
     }
 }
