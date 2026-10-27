@@ -37,6 +37,7 @@ class IdempotencyAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
+                    IdempotencyJacksonAutoConfiguration.class,
                     IdempotencyJdbcAutoConfiguration.class,
                     IdempotencyCaffeineAutoConfiguration.class,
                     IdempotencyRedisAutoConfiguration.class,
@@ -96,6 +97,7 @@ class IdempotencyAutoConfigurationTest {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration.class,
+                        IdempotencyJacksonAutoConfiguration.class,
                         IdempotencyJdbcAutoConfiguration.class,
                         IdempotencyRedisAutoConfiguration.class,
                         IdempotencyAutoConfiguration.class))

@@ -11,6 +11,8 @@ import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
 import com.kholodilin.idempotency.testsupport.InMemoryStore;
+import com.kholodilin.idempotency.testsupport.TestFingerprintStrategy;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import org.junit.jupiter.api.AfterAll;
@@ -66,11 +68,14 @@ class RedisCacheAsideIntegrationTest {
                 factory,
                 "cache-aside-" + System.nanoTime() + ":",
                 Duration.ofMinutes(5),
-                RedisCacheFailurePolicy.FAIL_OPEN);
+                RedisCacheFailurePolicy.FAIL_OPEN,
+                new TestIdempotencySerializer());
     }
 
     private DefaultIdempotencyService service(CaffeineLocalCache caffeine, RedisDistributedCache redis) {
         return new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .localCache(caffeine)
                 .distributedCache(redis)
                 .requireActiveTransaction(false)
@@ -124,6 +129,8 @@ class RedisCacheAsideIntegrationTest {
     void persistenceHitIsPromotedToRedisAndCaffeine() {
         // outcome exists only in persistence (e.g. caches were cold-restarted)
         DefaultIdempotencyService noCacheService = new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .requireActiveTransaction(false)
                 .build();
         noCacheService
@@ -164,8 +171,12 @@ class RedisCacheAsideIntegrationTest {
                         .build());
         dead.afterPropertiesSet();
         try {
-            RedisDistributedCache deadCache =
-                    new RedisDistributedCache(dead, "dead:", Duration.ofMinutes(5), RedisCacheFailurePolicy.FAIL_OPEN);
+            RedisDistributedCache deadCache = new RedisDistributedCache(
+                    dead,
+                    "dead:",
+                    Duration.ofMinutes(5),
+                    RedisCacheFailurePolicy.FAIL_OPEN,
+                    new TestIdempotencySerializer());
             DefaultIdempotencyService service = service(new CaffeineLocalCache(), deadCache);
 
             ExecutionResult<PaymentResult> first = service.operation("CREATE_PAYMENT")

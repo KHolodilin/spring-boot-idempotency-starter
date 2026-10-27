@@ -11,6 +11,7 @@ import com.kholodilin.idempotency.demo.model.PaymentResult;
 import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.model.RefundResult;
 import com.kholodilin.idempotency.demo.repository.PaymentRepository;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class PaymentService {
     private final IdempotencyService idempotencyService;
     private final PaymentRepository paymentRepository;
     private final FailureSimulator failureSimulator;
+    private final IdempotencySerializer serializer;
 
     @Transactional
     public ExecutionResult<PaymentResult> createPayment(String idempotencyKey, CreatePaymentRequest request) {
@@ -51,7 +53,7 @@ public class PaymentService {
         // deterministic business rejection: replayed on duplicate requests
         if (request.amount().compareTo(BALANCE) > 0) {
             return ExecutionResult.rejected(
-                    "INSUFFICIENT_FUNDS", new InsufficientFundsDetails(request.amount(), BALANCE));
+                    "INSUFFICIENT_FUNDS", new InsufficientFundsDetails(request.amount(), BALANCE), serializer);
         }
 
         String paymentId = UUID.randomUUID().toString();
@@ -67,7 +69,7 @@ public class PaymentService {
                 .request(request)
                 .execute(RefundResult.class, () -> {
                     if (request.amount().compareTo(REFUND_LIMIT) > 0) {
-                        return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request);
+                        return ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request, serializer);
                     }
                     return ExecutionResult.success(new RefundResult(
                             UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED"));

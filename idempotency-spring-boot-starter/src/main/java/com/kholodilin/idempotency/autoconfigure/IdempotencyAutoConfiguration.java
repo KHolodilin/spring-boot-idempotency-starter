@@ -2,8 +2,6 @@ package com.kholodilin.idempotency.autoconfigure;
 
 import com.kholodilin.idempotency.IdempotencyService;
 import com.kholodilin.idempotency.core.DefaultIdempotencyServiceBuilder;
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.spi.DistributedCache;
 import com.kholodilin.idempotency.spi.FingerprintStrategy;
 import com.kholodilin.idempotency.spi.IdempotencyMetrics;
@@ -20,12 +18,13 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * Core auto-configuration: default {@link FingerprintStrategy}, {@link IdempotencySerializer}
- * and the {@link IdempotencyService} itself. Every default backs off when the application
- * provides its own bean of the same SPI type.
+ * Core auto-configuration for the {@link IdempotencyService}. Default
+ * {@link FingerprintStrategy} / {@link IdempotencySerializer} live in
+ * {@link IdempotencyJacksonAutoConfiguration}.
  */
 @AutoConfiguration(
         after = {
+            IdempotencyJacksonAutoConfiguration.class,
             IdempotencyJdbcAutoConfiguration.class,
             IdempotencyCaffeineAutoConfiguration.class,
             IdempotencyRedisAutoConfiguration.class,
@@ -34,18 +33,6 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnProperty(name = "idempotency.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public FingerprintStrategy idempotencyFingerprintStrategy(IdempotencyProperties properties) {
-        return new CanonicalJsonFingerprintStrategy(properties.getFingerprint().getAlgorithm());
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public IdempotencySerializer idempotencySerializer() {
-        return new JacksonIdempotencySerializer();
-    }
 
     @Bean
     @ConditionalOnMissingBean

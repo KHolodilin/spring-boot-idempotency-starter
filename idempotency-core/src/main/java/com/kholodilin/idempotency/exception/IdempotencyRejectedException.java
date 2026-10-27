@@ -1,10 +1,11 @@
 package com.kholodilin.idempotency.exception;
 
+import java.util.Objects;
+
 import com.kholodilin.idempotency.ExecutionResult;
 import com.kholodilin.idempotency.IdempotencyService;
-import com.kholodilin.idempotency.jackson.Json;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import org.jspecify.annotations.Nullable;
-import tools.jackson.databind.JsonNode;
 
 /**
  * Thrown by {@link ExecutionResult#valueOrThrow()} when the outcome is a business
@@ -19,26 +20,34 @@ import tools.jackson.databind.JsonNode;
 public class IdempotencyRejectedException extends IdempotencyException {
 
     private final String errorCode;
-    private final transient JsonNode details;
+    private final transient @Nullable String detailsJson;
 
-    public IdempotencyRejectedException(String errorCode, JsonNode details) {
+    public IdempotencyRejectedException(String errorCode, @Nullable String detailsJson) {
         super("Operation rejected: " + errorCode);
-        this.errorCode = errorCode;
-        this.details = details;
+        this.errorCode = Objects.requireNonNull(errorCode, "errorCode");
+        this.detailsJson = detailsJson;
     }
 
     public String errorCode() {
         return errorCode;
     }
 
-    public JsonNode details() {
-        return details;
+    /**
+     * JSON text with rejection details, or {@code null} when absent.
+     */
+    public @Nullable String detailsJson() {
+        return detailsJson;
     }
 
     /**
      * Converts the rejection details into the given type.
      */
-    public <T> @Nullable T detailsAs(Class<T> type) {
-        return Json.treeToValue(details, type);
+    public <T> @Nullable T detailsAs(Class<T> type, IdempotencySerializer serializer) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(serializer, "serializer");
+        if (detailsJson == null) {
+            return null;
+        }
+        return serializer.deserialize(detailsJson, type);
     }
 }

@@ -8,11 +8,11 @@ import java.util.function.Function;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.reactive.spi.ReactiveDistributedCache;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import reactor.core.publisher.Mono;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * {@link ReactiveDistributedCache} backed by Redis.
@@ -28,27 +28,29 @@ public final class ReactiveRedisDistributedCache implements ReactiveDistributedC
     public static final String DEFAULT_KEY_PREFIX = "idempotency:";
     public static final Duration DEFAULT_TTL = Duration.ofHours(1);
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
-
     private final ReactiveStringRedisTemplate redis;
     private final String keyPrefix;
     private final Duration ttl;
     private final RedisCacheFailurePolicy failurePolicy;
+    private final IdempotencySerializer serializer;
 
-    public ReactiveRedisDistributedCache(ReactiveRedisConnectionFactory connectionFactory) {
-        this(connectionFactory, DEFAULT_KEY_PREFIX, DEFAULT_TTL, RedisCacheFailurePolicy.FAIL_OPEN);
+    public ReactiveRedisDistributedCache(
+            ReactiveRedisConnectionFactory connectionFactory, IdempotencySerializer serializer) {
+        this(connectionFactory, DEFAULT_KEY_PREFIX, DEFAULT_TTL, RedisCacheFailurePolicy.FAIL_OPEN, serializer);
     }
 
     public ReactiveRedisDistributedCache(
             ReactiveRedisConnectionFactory connectionFactory,
             String keyPrefix,
             Duration ttl,
-            RedisCacheFailurePolicy failurePolicy) {
+            RedisCacheFailurePolicy failurePolicy,
+            IdempotencySerializer serializer) {
         Objects.requireNonNull(connectionFactory, "connectionFactory");
         this.redis = new ReactiveStringRedisTemplate(connectionFactory);
         this.keyPrefix = Objects.requireNonNull(keyPrefix, "keyPrefix");
         this.ttl = Objects.requireNonNull(ttl, "ttl");
         this.failurePolicy = Objects.requireNonNull(failurePolicy, "failurePolicy");
+        this.serializer = Objects.requireNonNull(serializer, "serializer");
     }
 
     @Override
@@ -58,7 +60,7 @@ public final class ReactiveRedisDistributedCache implements ReactiveDistributedC
                 key,
                 redis.opsForValue()
                         .get(redisKey(key))
-                        .map(json -> Optional.of(MAPPER.readValue(json, IdempotencyRecord.class)))
+                        .map(json -> Optional.ofNullable(serializer.deserialize(json, IdempotencyRecord.class)))
                         .defaultIfEmpty(Optional.empty()),
                 Optional.empty());
     }
@@ -68,7 +70,7 @@ public final class ReactiveRedisDistributedCache implements ReactiveDistributedC
         return guarded(
                         "put",
                         key,
-                        Mono.fromCallable(() -> MAPPER.writeValueAsString(record))
+                        Mono.fromCallable(() -> serializer.serialize(record))
                                 .flatMap(json -> redis.opsForValue().set(redisKey(key), json, ttl))
                                 .then(),
                         null)

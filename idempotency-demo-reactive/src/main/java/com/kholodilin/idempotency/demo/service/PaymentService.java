@@ -11,6 +11,7 @@ import com.kholodilin.idempotency.demo.model.RefundRequest;
 import com.kholodilin.idempotency.demo.model.RefundResult;
 import com.kholodilin.idempotency.demo.repository.PaymentRepository;
 import com.kholodilin.idempotency.reactive.ReactiveIdempotencyService;
+import com.kholodilin.idempotency.spi.IdempotencySerializer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -37,6 +38,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final FailureSimulator failureSimulator;
     private final TransactionalOperator transactionalOperator;
+    private final IdempotencySerializer serializer;
 
     public Mono<ExecutionResult<PaymentResult>> createPayment(String idempotencyKey, CreatePaymentRequest request) {
         return transactionalOperator.transactional(idempotencyService
@@ -51,7 +53,9 @@ public class PaymentService {
                 .then(Mono.defer(() -> {
                     if (request.amount().compareTo(BALANCE) > 0) {
                         return Mono.just(ExecutionResult.rejected(
-                                "INSUFFICIENT_FUNDS", new InsufficientFundsDetails(request.amount(), BALANCE)));
+                                "INSUFFICIENT_FUNDS",
+                                new InsufficientFundsDetails(request.amount(), BALANCE),
+                                serializer));
                     }
                     String paymentId = UUID.randomUUID().toString();
                     return paymentRepository
@@ -68,7 +72,7 @@ public class PaymentService {
                 .request(request)
                 .execute(RefundResult.class, () -> {
                     if (request.amount().compareTo(REFUND_LIMIT) > 0) {
-                        return Mono.just(ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request));
+                        return Mono.just(ExecutionResult.rejected("REFUND_LIMIT_EXCEEDED", request, serializer));
                     }
                     return Mono.just(ExecutionResult.success(new RefundResult(
                             UUID.randomUUID().toString(), request.paymentId(), request.amount(), "REFUNDED")));

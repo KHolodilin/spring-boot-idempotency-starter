@@ -24,6 +24,8 @@ import com.kholodilin.idempotency.exception.IdempotencyConflictException;
 import com.kholodilin.idempotency.model.IdempotencyKey;
 import com.kholodilin.idempotency.model.IdempotencyRecord;
 import com.kholodilin.idempotency.model.IdempotencyStatus;
+import com.kholodilin.idempotency.testsupport.TestFingerprintStrategy;
+import com.kholodilin.idempotency.testsupport.TestIdempotencySerializer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +85,8 @@ class PostgresIdempotencyIntegrationTest {
         JdbcClient.create(dataSource).sql("DELETE FROM idempotency_records").update();
         store = new JdbcPersistenceStore(dataSource, "idempotency_records");
         service = new DefaultIdempotencyServiceBuilder(store)
+                .serializer(new TestIdempotencySerializer())
+                .fingerprintStrategy(new TestFingerprintStrategy())
                 .clock(clock)
                 .persistenceTtl(Duration.ofHours(24))
                 .build();
@@ -240,7 +244,8 @@ class PostgresIdempotencyIntegrationTest {
                 .request(command)
                 .execute(
                         PaymentResult.class,
-                        () -> ExecutionResult.rejected("INSUFFICIENT_FUNDS", new Details(1500, 200))));
+                        () -> ExecutionResult.rejected(
+                                "INSUFFICIENT_FUNDS", new Details(1500, 200), new TestIdempotencySerializer())));
 
         ExecutionResult<PaymentResult> replayed = tx.execute(status -> service.operation("CREATE_PAYMENT")
                 .key("rej-1")
@@ -249,10 +254,13 @@ class PostgresIdempotencyIntegrationTest {
                     throw new AssertionError("action must not run on replay");
                 }));
 
-        assertThat(replayed).isEqualTo(first);
+        Rejected<PaymentResult> firstRejected = (Rejected<PaymentResult>) first;
         Rejected<PaymentResult> rejected = (Rejected<PaymentResult>) replayed;
-        assertThat(rejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
-        assertThat(rejected.details().get("amount").asLong()).isEqualTo(1500);
+        assertThat(rejected.errorCode()).isEqualTo(firstRejected.errorCode()).isEqualTo("INSUFFICIENT_FUNDS");
+        TestIdempotencySerializer serializer = new TestIdempotencySerializer();
+        assertThat(rejected.detailsAs(Details.class, serializer))
+                .isEqualTo(firstRejected.detailsAs(Details.class, serializer))
+                .isEqualTo(new Details(1500, 200));
 
         IdempotencyRecord record =
                 store.find(new IdempotencyKey("CREATE_PAYMENT", "rej-1")).orElseThrow();

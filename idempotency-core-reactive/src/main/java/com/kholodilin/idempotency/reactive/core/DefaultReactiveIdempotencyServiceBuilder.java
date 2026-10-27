@@ -4,8 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Objects;
 
-import com.kholodilin.idempotency.jackson.CanonicalJsonFingerprintStrategy;
-import com.kholodilin.idempotency.jackson.JacksonIdempotencySerializer;
 import com.kholodilin.idempotency.reactive.spi.ReactiveDistributedCache;
 import com.kholodilin.idempotency.reactive.spi.ReactivePersistenceStore;
 import com.kholodilin.idempotency.reactive.spi.ReactiveTransactionContext;
@@ -18,14 +16,18 @@ import org.jspecify.annotations.Nullable;
 /**
  * Fluent builder for {@link DefaultReactiveIdempotencyService}.
  *
- * <p>Only {@link ReactivePersistenceStore} is required; everything else has defaults
- * suitable for tests and non-Spring usage.
+ * <p>{@link ReactivePersistenceStore}, {@link FingerprintStrategy} and
+ * {@link IdempotencySerializer} are required. Jackson-based defaults live in
+ * {@code idempotency-jackson3} and must be supplied explicitly (or via Spring Boot
+ * auto-configuration).
  */
 public final class DefaultReactiveIdempotencyServiceBuilder {
 
     final ReactivePersistenceStore persistenceStore;
-    FingerprintStrategy fingerprintStrategy = new CanonicalJsonFingerprintStrategy();
-    IdempotencySerializer serializer = new JacksonIdempotencySerializer();
+
+    @Nullable FingerprintStrategy fingerprintStrategy;
+
+    @Nullable IdempotencySerializer serializer;
 
     @Nullable LocalCache localCache;
 
@@ -47,12 +49,12 @@ public final class DefaultReactiveIdempotencyServiceBuilder {
     }
 
     public DefaultReactiveIdempotencyServiceBuilder fingerprintStrategy(FingerprintStrategy fingerprintStrategy) {
-        this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy);
+        this.fingerprintStrategy = Objects.requireNonNull(fingerprintStrategy, "fingerprintStrategy");
         return this;
     }
 
     public DefaultReactiveIdempotencyServiceBuilder serializer(IdempotencySerializer serializer) {
-        this.serializer = Objects.requireNonNull(serializer);
+        this.serializer = Objects.requireNonNull(serializer, "serializer");
         return this;
     }
 
@@ -110,6 +112,8 @@ public final class DefaultReactiveIdempotencyServiceBuilder {
     }
 
     public DefaultReactiveIdempotencyService build() {
+        Objects.requireNonNull(fingerprintStrategy, "fingerprintStrategy");
+        Objects.requireNonNull(serializer, "serializer");
         return new DefaultReactiveIdempotencyService(this);
     }
 }
