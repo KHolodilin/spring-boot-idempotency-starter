@@ -8,12 +8,12 @@
     <parent>
         <groupId>com.kholodilin</groupId>
         <artifactId>spring-boot-idempotency-starter-parent</artifactId>
-        <version>2.0.0-SNAPSHOT</version>
+        <version>1.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spring-boot-idempotency-starter-reactive-boot3</artifactId>
     <name>Spring Boot Idempotency Starter Reactive (Boot 3.2+)</name>
-    <description>Auto-configuration for transactional idempotency with WebFlux/R2DBC on Spring Boot 3.2+ (Jackson 2).</description>
+    <description>Reactive fluent API and WebFlux auto-configuration for transactional idempotency on Spring Boot 3.2+ (Jackson 2): R2DBC/PostgreSQL with optional Caffeine and Redis for retry-safe reactive apps (HTTP, Kafka, and beyond).</description>
     <url>https://github.com/KHolodilin/spring-boot-idempotency-starter</url>
     <scm>
         <connection>scm:git:https://github.com/KHolodilin/spring-boot-idempotency-starter.git</connection>

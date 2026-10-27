@@ -2,15 +2,29 @@
 
 [![CI](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/KHolodilin/spring-boot-idempotency-starter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter/branch/main/graph/badge.svg)](https://codecov.io/gh/KHolodilin/spring-boot-idempotency-starter)
-[![Maven Central](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter.svg?label=maven-central)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter)
-[![Maven Central (reactive)](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-reactive.svg?label=maven-central%20reactive)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-reactive)
+[![Maven Central](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter.svg?label=boot4)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter)
+[![Maven Central (reactive)](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-reactive.svg?label=boot4%20reactive)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-reactive)
+[![Maven Central Boot 3](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-boot3.svg?label=boot3)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-boot3)
+[![Maven Central Boot 3 reactive](https://img.shields.io/maven-central/v/com.kholodilin/spring-boot-idempotency-starter-reactive-boot3.svg?label=boot3%20reactive)](https://central.sonatype.com/artifact/com.kholodilin/spring-boot-idempotency-starter-reactive-boot3)
 [![Scarf downloads](https://api.scarf.sh/v2/packages/Kholodilin/3d9ac965-190f-46ad-a7b0-9306d6cda904/downloads-badge)](https://scarf.sh)
 [![Scarf companies](https://api.scarf.sh/v2/packages/Kholodilin/3d9ac965-190f-46ad-a7b0-9306d6cda904/commercial-users-badge)](https://scarf.sh)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot 3](https://img.shields.io/badge/Spring%20Boot-3.2%2B-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Transactional idempotency for Spring Boot with a simple fluent API.
+One SPI, four starters — pick **one** that matches your Boot line and stack.
+
+| artifactId | Boot | Jackson |
+|---|---|---|
+| `idempotency-core`, `idempotency-core-reactive`, persistence, caches | — | no Jackson |
+| `idempotency-jackson3` | — | Jackson 3 |
+| `idempotency-jackson2` | — | Jackson 2 |
+| `spring-boot-idempotency-starter` | 4.x | Jackson 3 |
+| `spring-boot-idempotency-starter-reactive` | 4.x | Jackson 3 |
+| `spring-boot-idempotency-starter-boot3` | 3.2+ | Jackson 2 |
+| `spring-boot-idempotency-starter-reactive-boot3` | 3.2+ | Jackson 2 |
 
 The call timed out, the client retried, and the payment went through
 twice. You add a unique key to the table — now the retry fails with a
@@ -41,6 +55,7 @@ record rolls back with it, and no key is ever left stuck in
 - [Demo](#-demo)
 - [See it under load](#-see-it-under-load)
 - [FAQ](#-faq)
+- [Breaking changes (1.2.0) / Boot 3](#-breaking-changes-120--boot-3)
 - [Requirements](#-requirements)
 - [Build](#-build)
 - [Releasing](#-releasing)
@@ -133,16 +148,16 @@ Worth knowing before you adopt it:
   is `VARCHAR(255)`, and the outcome is stored as `JSONB` — results and
   rejection details must be serializable by the configured
   `IdempotencySerializer` (Jackson by default).
-- **Spring Boot 4 and Java 21 only.** The modules are built against
-  Jackson 3 and `JdbcClient`; there is no 3.x backport.
+- **Java 21+.** Boot **4.x** starters use Jackson 3; Boot **3.2+**
+  starters use Jackson 2 (`*-boot3` artifacts).
 - **TTL does not hide a row.** `expires_at` is only a marker for the
   cleanup job: until the row is physically deleted it keeps being
   replayed.
 
 ## 🚀 Quick Start
 
-Choose the starter that matches the way your application writes to
-PostgreSQL.
+Choose the starter that matches your Spring Boot line and the way your
+application writes to PostgreSQL.
 
 |  | 🧱 Servlet / JDBC | ⚡ Reactive / R2DBC |
 |---|---|---|
@@ -150,19 +165,21 @@ PostgreSQL.
 | Database access | JDBC / `DataSource` | R2DBC / `ConnectionFactory` |
 | Service | `IdempotencyService` | `ReactiveIdempotencyService` |
 | Transaction | `@Transactional` | `TransactionalOperator` |
-| Starter | `spring-boot-idempotency-starter` | `spring-boot-idempotency-starter-reactive` |
+| Boot 4.x | `spring-boot-idempotency-starter` | `spring-boot-idempotency-starter-reactive` |
+| Boot 3.2+ | `spring-boot-idempotency-starter-boot3` | `spring-boot-idempotency-starter-reactive-boot3` |
 
-Both starters use the same `ExecutionResult` model and the same
-`idempotency_records` table. Pick the one that matches your business
-writes.
+All starters share the same `ExecutionResult` model and the same
+`idempotency_records` table. Pick **one** starter per application.
 
 > **Do not mix JDBC and R2DBC idempotency services in the same business
 > transaction.** JDBC and R2DBC use different transaction models.
 
-The snippets below use `1.0.1`. The Maven Central badges at the top of
+> **Do not add both Boot 4 and Boot 3 starters** on the same classpath.
+
+The snippets below use `1.2.0`. The Maven Central badges at the top of
 this page always show the latest release.
 
-### Servlet / JDBC
+### Spring Boot 4.x — Servlet / JDBC
 
 Maven:
 
@@ -170,32 +187,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 
 <!-- optional: L1 cache -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a RedisConnectionFactory, e.g. via spring-boot-starter-data-redis) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter:1.0.1")
+implementation("com.kholodilin:spring-boot-idempotency-starter:1.2.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.1")
-implementation("com.kholodilin:idempotency-distributed-cache-redis:1.0.1")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.2.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis:1.2.0")
 ```
 
 A PostgreSQL `DataSource` in the context is all it takes — the starter
@@ -209,6 +226,7 @@ activate simply by being present on the classpath.
 public class PaymentService {
 
     private final IdempotencyService idempotencyService;
+    private final IdempotencySerializer serializer;
 
     @Transactional
     public ExecutionResult<PaymentResult> createPayment(String key, CreatePaymentRequest request) {
@@ -220,7 +238,7 @@ public class PaymentService {
                     if (request.amount().compareTo(balance) > 0) {
                         // deterministic business rejection: persisted and replayed on duplicates
                         return ExecutionResult.rejected("INSUFFICIENT_FUNDS",
-                                new InsufficientFundsDetails(request.amount(), balance));
+                                new InsufficientFundsDetails(request.amount(), balance), serializer);
                     }
                     paymentRepository.insert(...); // business changes in the same transaction
                     return ExecutionResult.success(new PaymentResult(...));
@@ -248,7 +266,7 @@ class ApiExceptionHandler {
     @ExceptionHandler(IdempotencyRejectedException.class)   // business rejection (422)
     ResponseEntity<?> onRejected(IdempotencyRejectedException e) {
         return ResponseEntity.unprocessableEntity()
-                .body(Map.of("code", e.errorCode(), "details", e.details()));
+                .body(Map.of("code", e.errorCode(), "details", e.detailsJson()));
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)   // same key, different payload (409)
@@ -269,14 +287,51 @@ replayed correctly.
 return paymentService.refund(key, request).fold(
         ResponseEntity::ok,
         rejected -> ResponseEntity.unprocessableEntity()
-                .body(Map.of("code", rejected.errorCode(), "details", rejected.details())));
+                .body(Map.of("code", rejected.errorCode(), "details", rejected.detailsJson())));
 ```
 
-Typed access to rejection details:
-`rejected.detailsAs(InsufficientFundsDetails.class)`.
+Typed access to rejection details (needs the app's `IdempotencySerializer`):
+`rejected.detailsAs(InsufficientFundsDetails.class, serializer)`.
+
+### Spring Boot 3.2+ — Servlet / JDBC
+
+Do not add both Boot 4 and Boot 3 starters.
+
+```xml
+<dependency>
+    <groupId>com.kholodilin</groupId>
+    <artifactId>spring-boot-idempotency-starter-boot3</artifactId>
+    <version>1.2.0</version>
+</dependency>
+```
+
+```kotlin
+implementation("com.kholodilin:spring-boot-idempotency-starter-boot3:1.2.0")
+```
+
+Optional caches are the same modules as Boot 4 (`idempotency-local-cache-caffeine`,
+`idempotency-distributed-cache-redis`). API, properties, and schema match the Boot 4
+servlet starter; auto-config wires Jackson 2 via `idempotency-jackson2`.
+
+### Spring Boot 3.2+ — WebFlux / R2DBC
+
+```xml
+<dependency>
+    <groupId>com.kholodilin</groupId>
+    <artifactId>spring-boot-idempotency-starter-reactive-boot3</artifactId>
+    <version>1.2.0</version>
+</dependency>
+```
+
+```kotlin
+implementation("com.kholodilin:spring-boot-idempotency-starter-reactive-boot3:1.2.0")
+```
+
+Same fluent API and `TransactionalOperator` requirement as the Boot 4 reactive
+starter; use `idempotency-distributed-cache-redis-reactive` for L2 when needed.
 
 <details>
-<summary>WebFlux / R2DBC — same API, <code>TransactionalOperator</code> instead of <code>@Transactional</code></summary>
+<summary>WebFlux / R2DBC (Boot 4.x) — same API, <code>TransactionalOperator</code> instead of <code>@Transactional</code></summary>
 
 The JDBC starter cannot share a transaction with R2DBC business writes.
 Use the separate artifact `spring-boot-idempotency-starter-reactive`.
@@ -290,32 +345,32 @@ Maven:
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>spring-boot-idempotency-starter-reactive</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 
 <!-- optional: L1 cache (same module as the JDBC starter) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-local-cache-caffeine</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 
 <!-- optional: L2 cache (requires a ReactiveRedisConnectionFactory) -->
 <dependency>
     <groupId>com.kholodilin</groupId>
     <artifactId>idempotency-distributed-cache-redis-reactive</artifactId>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:1.0.1")
+implementation("com.kholodilin:spring-boot-idempotency-starter-reactive:1.2.0")
 
 // optional caches
-implementation("com.kholodilin:idempotency-local-cache-caffeine:1.0.1")
-implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:1.0.1")
+implementation("com.kholodilin:idempotency-local-cache-caffeine:1.2.0")
+implementation("com.kholodilin:idempotency-distributed-cache-redis-reactive:1.2.0")
 ```
 
 A PostgreSQL `ConnectionFactory` and `DatabaseClient` in the context are
@@ -342,6 +397,7 @@ public class PaymentService {
 
     private final ReactiveIdempotencyService idempotencyService;
     private final TransactionalOperator transactionalOperator;
+    private final IdempotencySerializer serializer;
 
     public Mono<ExecutionResult<PaymentResult>> createPayment(String key, CreatePaymentRequest request) {
         return transactionalOperator.transactional(
@@ -355,7 +411,7 @@ public class PaymentService {
     private Mono<ExecutionResult<PaymentResult>> doCreatePayment(CreatePaymentRequest request) {
         if (request.amount().compareTo(balance) > 0) {
             return Mono.just(ExecutionResult.rejected("INSUFFICIENT_FUNDS",
-                    new InsufficientFundsDetails(request.amount(), balance)));
+                    new InsufficientFundsDetails(request.amount(), balance), serializer));
         }
         return paymentRepository.insert(...)
                 .thenReturn(ExecutionResult.success(new PaymentResult(...)));
@@ -387,7 +443,7 @@ completes), so a business rejection cannot roll back a committed
 return paymentService.refund(key, request).map(result -> result.fold(
         ResponseEntity::ok,
         rejected -> ResponseEntity.unprocessableEntity()
-                .body(Map.of("code", rejected.errorCode(), "details", rejected.details()))));
+                .body(Map.of("code", rejected.errorCode(), "details", rejected.detailsJson()))));
 ```
 
 </details>
@@ -455,17 +511,21 @@ The project is split into small modules. Add only the parts you need.
 
 | Module | Purpose |
 |---|---|
-| `idempotency-core` | Domain model, SPI, `DefaultIdempotencyService`, canonical JSON fingerprint, Jackson serialization |
+| `idempotency-core` | Domain model, SPI, `DefaultIdempotencyService` (no Jackson) |
 | `idempotency-core-reactive` | `ReactiveIdempotencyService` (`Mono<ExecutionResult>`), reactive SPI |
+| `idempotency-jackson3` | Jackson 3 `IdempotencySerializer` + fingerprint strategy (Boot 4) |
+| `idempotency-jackson2` | Jackson 2 `IdempotencySerializer` + fingerprint strategy (Boot 3) |
 | `idempotency-persistence-jdbc` | `PersistenceStore` for PostgreSQL (`JdbcClient`), schema management |
 | `idempotency-persistence-r2dbc` | `ReactivePersistenceStore` for PostgreSQL (`DatabaseClient`), same table/schema |
 | `idempotency-local-cache-caffeine` | L1 cache (Caffeine) — fast replays, hot-key protection |
 | `idempotency-distributed-cache-redis` | L2 cache (Redis, fail-open) — shared across application instances |
 | `idempotency-distributed-cache-redis-reactive` | L2 cache (`ReactiveStringRedisTemplate`, fail-open) |
-| `spring-boot-idempotency-starter` | Servlet/JDBC auto-configuration, configuration properties, Micrometer metrics |
-| `spring-boot-idempotency-starter-reactive` | WebFlux/R2DBC auto-configuration (`ConnectionFactory`), same `idempotency.*` prefix |
-| `idempotency-demo` | Runnable servlet demo: REST API, docker-compose, all scenarios |
-| `idempotency-demo-reactive` | Runnable WebFlux demo (own compose ports) |
+| `spring-boot-idempotency-starter` | Boot 4 servlet/JDBC auto-configuration, Micrometer metrics |
+| `spring-boot-idempotency-starter-reactive` | Boot 4 WebFlux/R2DBC auto-configuration, same `idempotency.*` prefix |
+| `spring-boot-idempotency-starter-boot3` | Boot 3.2+ servlet/JDBC auto-configuration (Jackson 2) |
+| `spring-boot-idempotency-starter-reactive-boot3` | Boot 3.2+ WebFlux/R2DBC auto-configuration (Jackson 2) |
+| `idempotency-demo` | Runnable servlet demo (Boot 4): REST API, docker-compose, all scenarios |
+| `idempotency-demo-reactive` | Runnable WebFlux demo (Boot 4; own compose ports) |
 
 ## ⚙ Configuration
 
@@ -595,6 +655,8 @@ repository do exactly that:
 
 ```java
 IdempotencyService service = new DefaultIdempotencyServiceBuilder(new InMemoryStore())
+        .fingerprintStrategy(fingerprintStrategy)
+        .serializer(serializer)
         .requireActiveTransaction(false)
         .build();
 
@@ -738,16 +800,39 @@ one business transaction: JDBC uses `DataSource` / ThreadLocal TX,
 reactive uses `ConnectionFactory` / Reactor Context. Pick the starter
 that matches the writes.
 
+## ⚠ Breaking changes (1.2.0) / Boot 3
+
+Staying on **1.x** intentionally. Starter auto-config covers the common path;
+manual builders and custom SPI wiring need updates:
+
+- `ExecutionResult.Rejected` / `IdempotencyRejectedException`: `JsonNode` →
+  `detailsJson` (`String`); use `detailsAs(Class, IdempotencySerializer)`.
+- Builders require explicit `IdempotencySerializer` + `FingerprintStrategy`.
+- Jackson lives in `idempotency-jackson3` (Boot 4) or `idempotency-jackson2`
+  (Boot 3), not in core.
+- Redis caches take an injected `IdempotencySerializer`.
+
+Boot **3.2+** has no demo module — use the `*-boot3` starter smoke ITs.
+Raising the Boot 3 minimum later (e.g. 3.2 → 3.4) keeps the same
+`*-boot3` artifactIds.
+
 ## 📋 Requirements
 
 - Java 21+
-- Spring Boot 4.x (Jackson 3)
+- Spring Boot **4.x** (`spring-boot-idempotency-starter` /
+  `-reactive`, Jackson 3) **or** Spring Boot **3.2+**
+  (`*-boot3` / `*-reactive-boot3`, Jackson 2)
 - PostgreSQL 13+
 
 ## 🔨 Build
 
 ```bash
 mvn clean verify     # integration tests require a running Docker daemon (Testcontainers)
+# extra Boot 3 compatibility (CI also runs these):
+mvn verify -pl idempotency-spring-boot-starter-boot3 -am -P boot3-34
+mvn verify -pl idempotency-spring-boot-starter-reactive-boot3 -am -P boot3-34
+mvn verify -pl idempotency-spring-boot-starter-boot3 -am -P boot3-latest
+mvn verify -pl idempotency-spring-boot-starter-reactive-boot3 -am -P boot3-latest
 ```
 
 The build enforces code format (Spotless / Palantir Java Format — run
@@ -762,8 +847,8 @@ Push a tag — CI publishes signed artifacts to Maven Central and
 creates a GitHub Release:
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 ## 🤝 Contributing and support

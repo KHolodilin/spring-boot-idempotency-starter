@@ -77,3 +77,15 @@ jobs:
             idempotency-spring-boot-starter-reactive/target/spring-boot-idempotency-starter-reactive-*.jar
             !idempotency-spring-boot-starter-reactive/target/*-sources.jar
             !idempotency-spring-boot-starter-reactive/target/*-javadoc.jar
+            idempotency-jackson2/target/idempotency-jackson2-*.jar
+            !idempotency-jackson2/target/*-sources.jar
+            !idempotency-jackson2/target/*-javadoc.jar
+            idempotency-jackson3/target/idempotency-jackson3-*.jar
+            !idempotency-jackson3/target/*-sources.jar
+            !idempotency-jackson3/target/*-javadoc.jar
+            idempotency-spring-boot-starter-boot3/target/spring-boot-idempotency-starter-boot3-*.jar
+            !idempotency-spring-boot-starter-boot3/target/*-sources.jar
+            !idempotency-spring-boot-starter-boot3/target/*-javadoc.jar
+            idempotency-spring-boot-starter-reactive-boot3/target/spring-boot-idempotency-starter-reactive-boot3-*.jar
+            !idempotency-spring-boot-starter-reactive-boot3/target/*-sources.jar
+            !idempotency-spring-boot-starter-reactive-boot3/target/*-javadoc.jar
