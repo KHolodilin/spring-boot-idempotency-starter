@@ -11,8 +11,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * Early defaults for {@link FingerprintStrategy} and {@link IdempotencySerializer}
- * so Redis and the core service can both depend on them.
+ * Boot 4 / Jackson 3 defaults for {@link FingerprintStrategy} and
+ * {@link IdempotencySerializer} ({@link CanonicalJsonFingerprintStrategy},
+ * {@link JacksonIdempotencySerializer}). Registered early so Redis and the core
+ * service can both depend on them; override either bean with
+ * {@code @ConditionalOnMissingBean}.
  */
 @AutoConfiguration
 @ConditionalOnProperty(name = "idempotency.enabled", matchIfMissing = true)
