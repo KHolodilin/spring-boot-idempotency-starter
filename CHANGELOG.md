@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-10-27
 
 ### Added
 
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (WebFlux/R2DBC), with Jackson 2 via `idempotency-jackson2`.
 - `idempotency-jackson3` for Boot 4 starters (Jackson 3).
 - CI profiles `boot3-34` and `boot3-latest` for both Boot 3 starters.
+- Shared Jackson 2 / Jackson 3 fingerprint parity fixture (same SHA-256).
 
 ### Changed / Breaking
 
@@ -139,8 +140,8 @@ Caffeine L1 and Redis L2 (`fail-open` by default).
 - Initial public release: JDBC starter, PostgreSQL persistence,
   Caffeine L1, Redis L2, servlet demo.
 
-[Unreleased]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...HEAD
-[1.2.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.1...v1.2.0
 [1.0.1]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/KHolodilin/spring-boot-idempotency-starter/compare/v0.3.6...v0.4.0

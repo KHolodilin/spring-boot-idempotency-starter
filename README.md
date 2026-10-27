@@ -14,13 +14,13 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Transactional idempotency for Spring Boot with a simple fluent API.
-One SPI, four starters — pick **one** that matches your Boot line and stack.
+One SPI, four starters: pick **one** that matches your Boot line and stack.
 
 | artifactId | Boot | Jackson |
 |---|---|---|
-| `idempotency-core`, `idempotency-core-reactive`, persistence, caches | — | no Jackson |
-| `idempotency-jackson3` | — | Jackson 3 |
-| `idempotency-jackson2` | — | Jackson 2 |
+| `idempotency-core`, `idempotency-core-reactive`, persistence, caches | n/a | no Jackson |
+| `idempotency-jackson3` | n/a | Jackson 3 |
+| `idempotency-jackson2` | n/a | Jackson 2 |
 | `spring-boot-idempotency-starter` | 4.x | Jackson 3 |
 | `spring-boot-idempotency-starter-reactive` | 4.x | Jackson 3 |
 | `spring-boot-idempotency-starter-boot3` | 3.2+ | Jackson 2 |

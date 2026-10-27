@@ -16,6 +16,8 @@ class CanonicalJsonFingerprintStrategyTest {
 
     record Command(String orderId, BigDecimal amount, String comment) {}
 
+    record ParityPayload(String orderId, BigDecimal amount, List<String> tags, Map<String, Object> meta) {}
+
     @Test
     void sameObjectProducesSameFingerprint() {
         Command command = new Command("o-1", new BigDecimal("10.50"), "hi");
@@ -169,5 +171,20 @@ class CanonicalJsonFingerprintStrategyTest {
 
         assertThat(canonical)
                 .isEqualTo(Json.mapper().getNodeFactory().binaryNode(bytes).toString());
+    }
+
+    @Test
+    void parityFixtureMatchesJackson2DocumentedHash() {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("z", 1);
+        meta.put("a", 2);
+        ParityPayload payload = new ParityPayload("o-parity", new BigDecimal("10.50"), List.of("a", "b"), meta);
+
+        // Same canonical form and SHA-256 as idempotency-jackson2 for this POJO.
+        assertThat(strategy.canonicalize(Json.valueToTree(payload)))
+                .isEqualTo(
+                        "{\"amount\":10.5,\"meta\":{\"a\":2,\"z\":1},\"orderId\":\"o-parity\",\"tags\":[\"a\",\"b\"]}");
+        assertThat(strategy.calculate(payload))
+                .isEqualTo("3422c4c5722f5437f6465687c0fe70b3481d1b3fa5594c4736443ca67cf2bce8");
     }
 }
